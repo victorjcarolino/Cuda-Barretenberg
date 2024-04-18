@@ -27,6 +27,8 @@ var MOD_Q_BASE[LIMBS] = {
     0xb85045b68181585dUL, 0x30644e72e131a029UL
 };
 
+
+
 /**
  * R^2 where R = 2^256 mod Q
  */

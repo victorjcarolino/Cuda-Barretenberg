@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <cooperative_groups.h>
+// #include <cooperative_groups.h>
 #include "primitives.cu"
 #include <thrust/device_vector.h>
 #include <thrust/transform.h>
@@ -22,6 +22,8 @@ struct uint254 {
         limbs[3] = 0;
     }
 
+    // TODO: write this operator using assembly
+    
     // __device__ __forceinline__
     // uint254 operator+(const uint254& other) const {
     //     uint254 result;

@@ -192,6 +192,21 @@ __global__ void initialize_buckets_kernel(g1_gpu::element *bucket) {
     fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].z.data[tid % 4]);
 }
 
+__global__ void initialize_buckets_kernel_thrust(g1_gpu::element *bucket) {     
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    // // Parameters for coperative groups
+    // auto grp = fixnum::layout();
+    // int subgroup = grp.meta_group_rank();
+    // int subgroup_size = grp.meta_group_size();
+
+    fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].x.data[tid % 4]);
+    fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].y.data[tid % 4]);
+    fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].z.data[tid % 4]);
+}
+
+
+
 /**
  * Scalar digit decomposition 
  */
@@ -304,7 +319,7 @@ __global__ void bucket_running_sum_kernel(g1_gpu::element *buckets, g1_gpu::elem
 
     g1_gpu::element line_sum;
 
-    // Load intitial points
+    // Load intitial pointsinitialize_buckets_kernel
     fq_gpu::load(buckets[((subgroup + (subgroup_size * blockIdx.x)) + 1) * (1 << c) - 1].x.data[tid % 4], line_sum.x.data[tid % 4]);
     fq_gpu::load(buckets[((subgroup + (subgroup_size * blockIdx.x)) + 1) * (1 << c) - 1].y.data[tid % 4], line_sum.y.data[tid % 4]);
     fq_gpu::load(buckets[((subgroup + (subgroup_size * blockIdx.x)) + 1) * (1 << c) - 1].z.data[tid % 4], line_sum.z.data[tid % 4]);

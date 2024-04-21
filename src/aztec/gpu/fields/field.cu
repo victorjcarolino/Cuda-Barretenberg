@@ -179,3 +179,71 @@ __device__ __forceinline__ var field_gpu<params>::mul(const var a, const var b, 
     res = z;
     return res;
 }
+
+
+/**
+ * Montgomery multiplication (CIOS algorithm) for modular multiplications
+ */
+template<class params> 
+__device__ __forceinline__ var field_gpu<params>::mul_thrust(const var a, const var b, var &res) {
+    auto grp = fixnum::layout();
+    int L = grp.thread_rank();
+    var mod = params::mod();
+
+    var x = a, y = b, z = digit::zero();
+    var tmp;
+
+    if (is_same<params, BN254_MOD_BASE>::value) {
+        digit::mul_lo(tmp, x, gpu_barretenberg::r_inv_base);    
+    }
+    else {
+         digit::mul_lo(tmp, x, gpu_barretenberg::r_inv_scalar);    
+    }
+
+    digit::mul_lo(tmp, tmp, grp.shfl(y, 0));
+    int cy = 0;
+
+    for (int i = 0; i < LIMBS; ++i) {
+        var u;
+        var xi = grp.shfl(x, i);
+        var z0 = grp.shfl(z, 0);
+        var tmpi = grp.shfl(tmp, i);
+
+        if (is_same<params, BN254_MOD_BASE>::value) {
+            digit::mad_lo(u, z0, gpu_barretenberg::r_inv_base, tmpi);
+        }
+        else {
+            digit::mad_lo(u, z0, gpu_barretenberg::r_inv_scalar, tmpi);
+        }
+
+        digit::mad_lo_cy(z, cy, mod, u, z);
+        digit::mad_lo_cy(z, cy, y, xi, z);
+
+        assert(L || z == 0);  
+        z = grp.shfl_down(z, 1); 
+        z = (L >= LIMBS - 1) ? 0 : z;
+
+        digit::add_cy(z, cy, z, cy);
+        digit::mad_hi_cy(z, cy, mod, u, z);
+        digit::mad_hi_cy(z, cy, y, xi, z);
+    }
+    
+    // Resolve carries
+    int msb = grp.shfl(cy, LIMBS - 1);
+    cy = grp.shfl_up(cy, 1); 
+    cy = (L == 0) ? 0 : cy;
+
+    fixnum::add_cy(z, cy, z, cy);
+    msb += cy;
+    assert(msb == !!msb);
+
+    var r;
+    int br;
+    fixnum::sub_br(r, br, z, mod);
+    if (msb || br == 0) {
+        assert(!msb || msb == br);
+        z = r;
+    }
+    res = z;
+    return res;
+}

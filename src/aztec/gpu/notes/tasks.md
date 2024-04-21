@@ -1,4 +1,28 @@
-# Implementation Plan
+# 375 Notes for Implementation TODOs
+- [ ] Implement addc_functor and addc_thurst for uint254 in fixnum.cu instead of primitives.cu
+- Remove one declaration of uint254 (from primitives.cu)
+- Write the correct + operator overloading for uint254 in fixnum.cu using the correct addc_functor and addc_thurst in primitives.cu
+- Combine digit and fixnum namespace functions into a single namespace thurst_fixnum using the required add functions in primitives.cu
+- [ ] Fix arithmetic in fixnum to not compute over 4 threads to avoid need of sync
+    - [ ] Fix fixnum to handle carry bits over all operations in limb indicies over the same thread on the uint254 type rather than propogating over another limb
+    - [ ] Fix field.cu to use updated functions from fixnum.cu
+    - [ ] Fix group.cu to use updated functions froom field.cu
+    - [ ] Fix kernels to pass entire coordinate to math function, instead of passing only one limb with "[tid % 4]"
+- [ ] Look into replacing functionality from cuda unbound to thrust api calls
+    - thrust::unique_by_key to get bucket offsets and indicies from sorted scalar-point pairs
+    - thrust sort can do the radix sort and unique_by_key can handle the gathering of single_bucket_indicies and bucket_offsets and bucket_sizes 
+- [ ] Modify code to not rely on cooperative groups
+    - How do we make sure that threads are computing over the correct portion of any single msm?
+    
+
+
+
+
+
+
+
+    
+# Implementation Plan (Tal)
 - [x] Set up a cloud infrastructure (NVIDIA A10 (Ampere) w/ 24 GB VRAM) on Oracle Cloud
 - [x] Initialize Barretenberg repo
 - [x] Integrate cuda-fixnum external library and add cuda / nvcc support

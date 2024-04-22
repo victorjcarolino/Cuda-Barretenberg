@@ -567,6 +567,7 @@ int tid = blockIdx.x * blockDim.x + threadIdx.x;
     g1_gpu::element R;
     g1_gpu::element Q;
 
+    // 1024 = 2^10 = 2^C
     fr_gpu exponent{ 1024, 0, 0, 0 };
 
     if (tid < LIMBS) {
@@ -575,6 +576,7 @@ int tid = blockIdx.x * blockDim.x + threadIdx.x;
         fq_gpu::load(0, final_result[0].y.data[tid % 4]); 
         fq_gpu::load(0, final_result[0].z.data[tid % 4]); 
         // Loop for each bucket module
+        // 26 = B/C
         for (unsigned z = 26; z > 0; z--) {
             // Initialize 'R' to the identity element, Q to the curve point
             fq_gpu::load(0, R.x.data[tid % 4]); 
@@ -590,6 +592,7 @@ int tid = blockIdx.x * blockDim.x + threadIdx.x;
             __syncthreads();
 
             // Loop for each limb starting with the last limb
+            // R = Q^1024
             for (int j = 3; j >= 0; j--) {
                 // Loop for each bit of scalar
                 for (int i = 64; i >= 0; i--) {   
@@ -608,6 +611,7 @@ int tid = blockIdx.x * blockDim.x + threadIdx.x;
                         );
                 }
             }
+            // final_result = final_sum[z-1] + R
             g1_gpu::add(
                 R.x.data[tid % 4], 
                 R.y.data[tid % 4], 
@@ -620,6 +624,7 @@ int tid = blockIdx.x * blockDim.x + threadIdx.x;
                 final_result[0].z.data[tid % 4]
             );
 
+            // if (final_result == 0) { final_result = 2*R; }
             if (fq_gpu::is_zero(final_result[0].x.data[tid % 4]) 
                 && fq_gpu::is_zero(final_result[0].y.data[tid % 4]) 
                 && fq_gpu::is_zero(final_result[0].z.data[tid % 4])) {

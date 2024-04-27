@@ -12,6 +12,10 @@
 
 using namespace gpu_barretenberg;
 
+// template<class params> 
+// __device__ __forceinline__ field_gpu<params>::field_gpu(std::uint a, var b, var c, var d) noexcept
+//     : limbs{ a, b, c, d } {};
+
 template<class params>
 __device__ __forceinline__ void field_single<params>::add(const uint254 a, const uint254 b, uint254 &res) {
     const var *p;
@@ -121,11 +125,13 @@ __device__ __forceinline__ void field_single<params>::sub_inplace(uint254 &af, c
     );
 }
 
+// CIOS Montgomery Multiplication algorithm
 template<class params>
 __device__ __forceinline__ void field_single<params>::mul(const uint254 af, const uint254 bf, uint254 &resf) {
     const var *a = af.limbs;
     const var *b = bf.limbs;
-    var T[6]{0, 0, 0, 0, 0, 0};
+    // We don't need T[5] (ie. "T[s+1]" in the paper) since with a 254-bit curve, overflow is impossible
+    var T[5]{0, 0, 0, 0, 0};
     var r_inv;
     const var *p;
     if (std::is_same_v<params, BN254_MOD_BASE>) {
@@ -138,48 +144,43 @@ __device__ __forceinline__ void field_single<params>::mul(const uint254 af, cons
 
     for (int i = 0; i < 4; i++) {
         asm(
-            "mad.lo.cc.u64 %0, %11, %12, %6;\n\t"   // T[0] = {a[i]*b[0]}.lo + T[0]
-            "madc.lo.cc.u64 %1, %11, %13, %7;\n\t"  // T[1] = {a[i]*b[1]}.lo + T[1] + cf
-            "madc.lo.cc.u64 %2, %11, %14, %8;\n\t"  // T[2] = {a[i]*b[2]}.lo + T[2] + cf
-            "madc.lo.cc.u64 %3, %11, %15, %9;\n\t"  // T[3] = {a[i]*b[3]}.lo + T[3] + cf
-            "addc.cc.u64 %4, %10, 0;\n\t"           // T[4] = T[4] + cf
-            "addc.u64 %5, 0, 0;\n\t"                // T[5] = cf
-            "mad.hi.cc.u64 %1, %11, %12, %1;\n\t"   // T[1] += {a[i]*b[0]}.hi
-            "madc.hi.cc.u64 %2, %11, %13, %2;\n\t"  // T[2] += {a[i]*b[1]}.hi + cf
-            "madc.hi.cc.u64 %3, %11, %14, %3;\n\t"  // T[3] += {a[i]*b[2]}.hi + cf
-            "madc.hi.cc.u64 %4, %11, %15, %4;\n\t"  // T[4] += {a[i]*b[3]}.hi + cf
-            "addc.u64 %5, %5, 0;"                   // T[5] += cf
-            : "=l"(T[0]), "=l"(T[1]), "=l"(T[2]), "=l"(T[3]), "=l"(T[4]), "=l"(T[5])
-              // 6
+            "mad.lo.cc.u64 %0, %10, %11, %5;\n\t"   // T[0] = {a[i]*b[0]}.lo + T[0]
+            "madc.lo.cc.u64 %1, %10, %12, %6;\n\t"  // T[1] = {a[i]*b[1]}.lo + T[1] + cf
+            "madc.lo.cc.u64 %2, %10, %13, %7;\n\t"  // T[2] = {a[i]*b[2]}.lo + T[2] + cf
+            "madc.lo.cc.u64 %3, %10, %14, %8;\n\t"  // T[3] = {a[i]*b[3]}.lo + T[3] + cf
+            "addc.u64 %4, %9, 0;\n\t"               // T[4] = T[4] + cf
+            "mad.hi.cc.u64 %1, %10, %11, %1;\n\t"   // T[1] += {a[i]*b[0]}.hi
+            "madc.hi.cc.u64 %2, %10, %12, %2;\n\t"  // T[2] += {a[i]*b[1]}.hi + cf
+            "madc.hi.cc.u64 %3, %10, %13, %3;\n\t"  // T[3] += {a[i]*b[2]}.hi + cf
+            "madc.hi.u64 %4, %10, %14, %4;"         // T[4] += {a[i]*b[3]}.hi + cf
+            : "=l"(T[0]), "=l"(T[1]), "=l"(T[2]), "=l"(T[3]), "=l"(T[4])
+              // 5
             : "l"(T[0]), "l"(T[1]), "l"(T[2]), "l"(T[3]), "l"(T[4]),
-              // 11
+              // 10
               "l"(a[i]),
-              // 12
+              // 11
               "l"(b[0]), "l"(b[1]), "l"(b[2]), "l"(b[3])
         );
 
         var m = T[0] * r_inv;
         asm(
-            "{\n\t"
-            " .reg .u64 tmp;"                        // var tmp;
-            " mad.lo.cc.u64 tmp, %11, %12, %5;\n\t"  // tmp = {m*p[0]}.lo + T[0]
-            " madc.lo.cc.u64 %0, %11, %13, %6;\n\t"  // T[0] = {m*p[1]}.lo + T[1] + cf
-            " madc.lo.cc.u64 %1, %11, %14, %7;\n\t"  // T[1] = {m*p[2]}.lo + T[2] + cf
-            " madc.lo.cc.u64 %2, %11, %15, %8;\n\t"  // T[2] = {m*p[3]}.lo + T[3] + cf
-            " addc.cc.u64 %3, %9, 0;\n\t"            // T[3] = T[4] + cf
-            " addc.u64 %4, %10, 0;\n\t"              // T[4] = T[5] + cf
-            " mad.hi.cc.u64 %0, %11, %12, %0;\n\t"   // T[0] += {m*p[0]}.hi
-            " madc.hi.cc.u64 %1, %11, %13, %1;\n\t"  // T[1] += {m*p[1]}.hi + cf
-            " madc.hi.cc.u64 %2, %11, %14, %2;\n\t"  // T[2] += {m*p[2]}.hi + cf
-            " madc.hi.cc.u64 %3, %11, %15, %3;\n\t"  // T[3] += {m*p[3]}.hi + cf
-            " addc.u64 %4, %4, 0;\n\t"               // T[4] += cf
-            "}"
+            "mad.lo.cc.u64 %0, %10, %11, %5;\n\t"   // T[0] = {m*p[0]}.lo + T[0]  (result ignored; we just want to calculate cf)
+            "madc.lo.cc.u64 %0, %10, %12, %6;\n\t"  // T[0] = {m*p[1]}.lo + T[1] + cf
+            "madc.lo.cc.u64 %1, %10, %13, %7;\n\t"  // T[1] = {m*p[2]}.lo + T[2] + cf
+            "madc.lo.cc.u64 %2, %10, %14, %8;\n\t"  // T[2] = {m*p[3]}.lo + T[3] + cf
+            "addc.cc.u64 %3, %9, 0;\n\t"            // T[3] = T[4] + cf
+            "addc.u64 %4, 0, 0;\n\t"                // T[4] = cf
+            "mad.hi.cc.u64 %0, %10, %11, %0;\n\t"   // T[0] += {m*p[0]}.hi
+            "madc.hi.cc.u64 %1, %10, %12, %1;\n\t"  // T[1] += {m*p[1]}.hi + cf
+            "madc.hi.cc.u64 %2, %10, %13, %2;\n\t"  // T[2] += {m*p[2]}.hi + cf
+            "madc.hi.cc.u64 %3, %10, %14, %3;\n\t"  // T[3] += {m*p[3]}.hi + cf
+            "addc.u64 %4, %4, 0;\n\t"               // T[4] += cf
             : "=l"(T[0]), "=l"(T[1]), "=l"(T[2]), "=l"(T[3]), "=l"(T[4])
               // 5
-            : "l"(T[0]), "l"(T[1]), "l"(T[2]), "l"(T[3]), "l"(T[4]), "l"(T[5])
-              // 11
+            : "l"(T[0]), "l"(T[1]), "l"(T[2]), "l"(T[3]), "l"(T[4])
+              // 10
               "l"(m),
-              // 12
+              // 11
               "l"(p[0]), "l"(p[1]), "l"(p[2]), "l"(p[3])
         );
     }
@@ -190,7 +191,6 @@ __device__ __forceinline__ void field_single<params>::mul(const uint254 af, cons
     resf.limbs[3] = T[3];
 
     bool t_ge_p =
-        (T[4] > 0) ? true :
         (T[3] > p[3]) ? true :
         (T[3] < p[3]) ? false :
         (T[2] > p[2]) ? true :

@@ -124,7 +124,6 @@ __device__ __forceinline__ void field_single<params>::sub_inplace(uint254 &af, c
 
 template<class params>
 __device__ __forceinline__ void field_single<params>::mul(const uint254 af, const uint254 bf, uint254 &resf) {
-    // printf("??? %lu %lu %lu %lu\n", af.limbs[0], af.limbs[1], af.limbs[2], af.limbs[3]);
     const var *a = af.limbs;
     const var *b = bf.limbs;
     var T[6]{0, 0, 0, 0, 0, 0};
@@ -139,55 +138,53 @@ __device__ __forceinline__ void field_single<params>::mul(const uint254 af, cons
     }
 
     for (int i = 0; i < 4; i++) {
-        var C = 0;
-        for (int j = 0; j < 4; j++) {
-            var newC;
-            asm(
-                "mad.lo.cc.u64 %1, %2, %3, %1;\n\t"
-                "madc.hi.u64 %0, %2, %3, 0;\n\t"
-                "add.cc.u64 %1, %1, %4;\n\t"
-                "addc.u64 %0, %0, 0;"
-                : "=l"(newC), "+l"(T[j])
-                : "l"(a[i]), "l"(b[j]), "l"(C)
-            );
-            // printf("  %d: ai %lu bj %lu\n", i, a[i], b[j]);
-            C = newC;
-        }
         asm(
-            "add.cc.u64 %1, %1, %0;\n\t"
-            "addc.u64 %0, 0, 0;"
-            : "+l"(C), "+l"(T[4])
+            "mad.lo.cc.u64 %0, %11, %12, %6;\n\t"   // T[0] = a[i]*b[0] + T[0];
+            "madc.lo.cc.u64 %1, %11, %13, %7;\n\t"  // T[1] = a[i]*b[1] + T[1];
+            "madc.lo.cc.u64 %2, %11, %14, %8;\n\t"  // T[2] = a[i]*b[2] + T[2];
+            "madc.lo.cc.u64 %3, %11, %15, %9;\n\t"  // T[3] = a[i]*b[3] + T[3];
+            "addc.cc.u64 %4, %10, 0;\n\t"           //
+            "addc.u64 %5, 0, 0;\n\t"                //
+            "mad.hi.cc.u64 %1, %11, %12, %1;\n\t"   //
+            "madc.hi.cc.u64 %2, %11, %13, %2;\n\t"  //
+            "madc.hi.cc.u64 %3, %11, %14, %3;\n\t"  //
+            "madc.hi.cc.u64 %4, %11, %15, %4;\n\t"  //
+            "addc.u64 %5, 0, 0;"
+            : "=l"(T[0]), "=l"(T[1]), "=l"(T[2]), "=l"(T[3]), "=l"(T[4]), "=l"(T[5])
+              // 6
+            : "l"(T[0]), "l"(T[1]), "l"(T[2]), "l"(T[3]), "l"(T[4]),
+              // 11
+              "l"(a[i]),
+              // 12
+              "l"(b[0]), "l"(b[1]), "l"(b[2]), "l"(b[3])
         );
-        T[5] = C;
-
-        // printf("%d: %lu %lu %lu %lu\n", i, T[0], T[1], T[2], T[3]);
 
         var m = T[0] * r_inv;
-        var S;
         asm(
-            "mad.lo.cc.u64 %1, %2, %3, %4;\n\t"
-            "madc.hi.u64 %0, %2, %3, 0;"
-            : "=l"(C), "=l"(S)
-            : "l"(m), "l"(p[0]), "l"(T[0])
-        );
-        for (int j = 1; j < 4; j++) {
-            asm(
-                "mad.lo.cc.u64 %1, %2, %3, %0;\n\t"
-                "madc.hi.u64 %0, %2, %3, 0;\n\t"
-                "add.cc.u64 %1, %1, %4;\n\t"
-                "addc.u64 %0, %0, 0;"
-                : "+l"(C), "=l"(S)
-                : "l"(m), "l"(p[j]), "l"(T[j])
-            );
-            T[j-1] = S;
-        }
-        asm(
-            "add.cc.u64 %1, %0, %2;\n\t"
-            "addc.u64 %2, %3, 0;"
-            : "+l"(C), "=l"(T[3]), "+l"(T[4])
-            : "l"(T[5])
+            "{\n\t"
+            " .reg .u64 tmp;"
+            " mad.lo.cc.u64 tmp, %11, %12, %5;\n\t"  // tmp = {m*p[0]}.lo + T[0]
+            " madc.lo.cc.u64 %0, %11, %13, %6;\n\t"  // T[0] = {m*p[1]}.lo + T[1] + cf
+            " madc.lo.cc.u64 %1, %11, %14, %7;\n\t"  // T[1] = {m*p[2]}.lo + T[2] + cf
+            " madc.lo.cc.u64 %2, %11, %15, %8;\n\t"  // T[2] = {m*p[3]}.lo + T[3] + cf
+            " addc.cc.u64 %3, %9, 0;\n\t"            // T[3] = T[4] + cf
+            " addc.u64 %4, %10, 0;\n\t"              // T[4] = T[5] + cf
+            " mad.hi.cc.u64 %0, %11, %12, %0;\n\t"   // T[0] += {m*p[0]}.hi
+            " madc.hi.cc.u64 %1, %11, %13, %1;\n\t"  // T[1] += {m*p[1]}.hi + cf
+            " madc.hi.cc.u64 %2, %11, %14, %2;\n\t"  // T[2] += {m*p[2]}.hi + cf
+            " madc.hi.cc.u64 %3, %11, %15, %3;\n\t"  // T[3] += {m*p[3]}.hi + cf
+            " addc.u64 %4, %4, 0;\n\t"               // T[4] += cf
+            "}"
+            : "=l"(T[0]), "=l"(T[1]), "=l"(T[2]), "=l"(T[3]), "=l"(T[4])
+              // 5
+            : "l"(T[0]), "l"(T[1]), "l"(T[2]), "l"(T[3]), "l"(T[4]), "l"(T[5])
+              // 11
+              "l"(m),
+              // 12
+              "l"(p[0]), "l"(p[1]), "l"(p[2]), "l"(p[3])
         );
     }
+    printf("\n");
 
     // uint254 resf {T[0], T[1], T[2], T[3]};
     resf.limbs[0] = T[0];

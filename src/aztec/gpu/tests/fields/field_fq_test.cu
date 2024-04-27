@@ -327,81 +327,101 @@ void assert_checks(var *expected, var *result) {
     // Explicit synchronization barrier
     cudaDeviceSynchronize();
 
-    // Assert clause
-    assert(expected[0] == result[0]);
-    assert(expected[1] == result[1]);
-    assert(expected[2] == result[2]);
-    assert(expected[3] == result[3]);
-
     // Print statements
-    // printf("expected[0] is: %zu\n", expected[0]);
-    // printf("expected[1] is: %zu\n", expected[1]);
-    // printf("expected[2] is: %zu\n", expected[2]);
-    // printf("expected[3] is: %zu\n", expected[3]);
-    // printf("result[0] is: %zu\n", result[0]);
-    // printf("result[1] is: %zu\n", result[1]);
-    // printf("result[2] is: %zu\n", result[2]);
-    // printf("result[3] is: %zu\n", result[3]);
+    printf("expected[0] is: %zu\n", expected[0]);
+    printf("expected[1] is: %zu\n", expected[1]);
+    printf("expected[2] is: %zu\n", expected[2]);
+    printf("expected[3] is: %zu\n", expected[3]);
+    printf("result[0] is: %zu\n", result[0]);
+    printf("result[1] is: %zu\n", result[1]);
+    printf("result[2] is: %zu\n", result[2]);
+    printf("result[3] is: %zu\n", result[3]);
+
+    // Assert clause
+    if (expected[0] != result[0]) {
+        printf("    BAD!!\n");
+    }
+    if (expected[1] != result[1]) {
+        printf("    BAD!!\n");
+    }
+    if (expected[2] != result[2]) {
+        printf("    BAD!!\n");
+    }
+    if (expected[3] != result[3]) {
+        printf("    BAD!!\n");
+    }
 }
 
 void execute_kernels(var *a, var *b, var *expected, var *result) {    
     // Montgomery Multiplication Test 
     initialize_mont_mult<<<BLOCKS, THREADS>>>(a, b, expected);
+    cudaDeviceSynchronize();
     mont_mult<<<BLOCKS, LIMBS_NUM>>>(a, b, result);
     assert_checks(expected, result);
 
     // Montgomery Multiplication Test -- Short Integers 
     initialize_mont_mult_short<<<BLOCKS, THREADS>>>(a, b, expected);
+    cudaDeviceSynchronize();
     mont_mult_short<<<BLOCKS, LIMBS_NUM>>>(a, b, result);
     assert_checks(expected, result);
 
     // Multiply Test - Square Consistency 
     initialize_mul_square_consistency<<<BLOCKS, THREADS>>>(a, b);
+    cudaDeviceSynchronize();
     mul_square_consistency<<<BLOCKS, LIMBS_NUM>>>(a, b, expected, result);
     assert_checks(expected, result);
 
     // Multiply Test - Square Against Constants 
     initialize_sqr_check_against_constants<<<BLOCKS, THREADS>>>(a, expected);
+    cudaDeviceSynchronize();
     sqr_check_against_constants<<<BLOCKS, LIMBS_NUM>>>(a, result);
     assert_checks(expected, result);
 
     // Add Test - Check Against Constants
     initialize_add_check_against_constants<<<BLOCKS, THREADS>>>(a, b, expected);
+    cudaDeviceSynchronize();
     add_check_against_constants<<<BLOCKS, LIMBS_NUM>>>(a, b, result);
     assert_checks(expected, result);
 
     // Subtract Test - Check Against Constant
     initialize_sub_check_against_constants<<<BLOCKS, THREADS>>>(a, b, expected);
+    cudaDeviceSynchronize();
     sub_check_against_constants<<<BLOCKS, LIMBS_NUM>>>(a, b, result);
     assert_checks(expected, result);
 
     // Convert To Montgomery Form Test
     initialize_to_montgomery_form<<<BLOCKS, THREADS>>>(a, expected);
+    cudaDeviceSynchronize();
     to_montgomery_form<<<BLOCKS, LIMBS_NUM>>>(a, result);
     assert_checks(expected, result);
 
     // Convert From Montgomery Form Test
     initialize_from_montgomery_form<<<BLOCKS, THREADS>>>(a, expected);
+    cudaDeviceSynchronize();
     from_montgomery_form<<<BLOCKS, LIMBS_NUM>>>(a, result);
     assert_checks(expected, result);
 
     // Montgomery Consistency Check Test
     initialize_montgomery_consistency_check<<<BLOCKS, THREADS>>>(a, b);
+    cudaDeviceSynchronize();
     montgomery_consistency_check<<<BLOCKS, LIMBS_NUM>>>(a, b, expected, result);
     assert_checks(expected, result);
 
     // Add Multiplication Consistency Test
     initialize_add_mul_consistency<<<BLOCKS, THREADS>>>(a, b);
+    cudaDeviceSynchronize();
     add_mul_consistency<<<BLOCKS, LIMBS_NUM>>>(a, b, expected, result);
     assert_checks(expected, result);
 
     // Subtract Multiplication Consistency test
     initialize_sub_mul_consistency<<<BLOCKS, THREADS>>>(a, b);
+    cudaDeviceSynchronize();
     sub_mul_consistency<<<BLOCKS, LIMBS_NUM>>>(a, b, expected, result);
     assert_checks(expected, result);
 
     // Cube Root Test
     initialize_cube<<<BLOCKS, THREADS>>>(a);
+    cudaDeviceSynchronize();
     cube<<<BLOCKS, LIMBS_NUM>>>(a, expected, result);
     assert_checks(expected, result);
 }

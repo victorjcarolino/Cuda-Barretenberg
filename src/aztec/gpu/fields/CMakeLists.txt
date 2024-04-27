@@ -7,6 +7,7 @@ include_directories(../bignum)
 
 add_library(field_library STATIC 
     ./field.cu
+    ./field_single.cu
 )
 
 target_link_libraries(

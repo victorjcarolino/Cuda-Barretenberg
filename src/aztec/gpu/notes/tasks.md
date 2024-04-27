@@ -13,8 +13,16 @@
     - thrust sort can do the radix sort and unique_by_key can handle the gathering of single_bucket_indicies and bucket_offsets and bucket_sizes 
 - [ ] Modify code to not rely on cooperative groups
     - How do we make sure that threads are computing over the correct portion of any single msm?
-    
+- Check for performance on different parts of Pippenger algortihm and Compare with Tal's implementation
+    - Benchmark on Tal's implementation is already taken and we have numbers
+- [ ] Convert kernel.cu split_scalars_kernel to Thrust
+- [ ] Convert kernel.cu decompose_scalars to Thrust functor
 
+
+# Things we did
+1. Changed the field arithmetic and elliptic curve operations on spearate limbs of a 256 bit integer to a single variable with 4 limbs and using thrust libarary to handle the parallel operations between the limbs. Because the operation between the limbs contains dependencies due to the carries and thus requires lot of synchronization to perfrom in parallel.
+
+2. Implemented assembly for single threaded 254 bit multiplication and multiplication+add to replace the field arithmetic from the existing 4 threaded execution for the 4 limbs to avoid synchronization between the 4 threads currently being done with cuda cooperative groups
 
 
 

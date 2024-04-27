@@ -15,10 +15,11 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
 
     // Bucket initialization kernel
     point_t *buckets;
-    unsigned NUM_THREADS = 1 << 10; 
+    unsigned NUM_THREADS = 1 << 10; // # threads used for initializing buckets & splitting scalars
 
     unsigned NUM_BLOCKS = (config.num_buckets + NUM_THREADS - 1) / NUM_THREADS;
-    CUDA_WRAPPER(cudaMallocAsync(&buckets, config.num_buckets * 3 * 4 * sizeof(uint64_t), stream));
+    // config.num_buckets is (buckets per window * #windows), each point has 3 coordinates, the size of a coordinate is (4 * sizeof(uint64_t)), 
+    CUDA_WRAPPER(cudaMallocAsync(&buckets, config.num_buckets * 3 * (4 * sizeof(uint64_t)), stream));
     initialize_buckets_kernel<<<NUM_BLOCKS * 4, NUM_THREADS, 0, stream>>>(buckets);    // TODO remove the *4
 
     // Scalars decomposition kernel
@@ -28,6 +29,7 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
         (params->bucket_indices + npoints, params->point_indices + npoints, scalars, npoints, windows, c);
 
     // Execute CUB routines for determining bucket sizes, offsets, etc. 
+        // sort points, 
     execute_cub_routines(config, config.params, stream);
 
     // Bucket accumulation kernel

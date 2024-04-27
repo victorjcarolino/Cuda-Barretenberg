@@ -11,34 +11,34 @@
 
 // 4 * 64 = 256 bits, but we'll only use 254 of them since we are using 
 // BN254 with order 254 and scalars/field elements are 254 bits
-struct uint254 {
-    std::uint64_t limbs[4]; 
+// struct uint254 {
+//     std::uint64_t limbs[4]; 
 
-    __device__ __forceinline__
-    uint254() {
-        limbs[0] = 0;
-        limbs[1] = 0;
-        limbs[2] = 0;
-        limbs[3] = 0;
-    }
+//     __device__ __forceinline__
+//     uint254() {
+//         limbs[0] = 0;
+//         limbs[1] = 0;
+//         limbs[2] = 0;
+//         limbs[3] = 0;
+//     }
 
-    // __device__ __forceinline__
-    // uint254 operator+(const uint254& other) const {
-    //     uint254 result;
-    //     std::uint64_t carry = 0;
-    //     for (int i = 0; i < 4; i++) {
-    //         result.limbs[i] = limbs[i] + other.limbs[i] + carry;
-    //         carry = (result.limbs[i] < limbs[i] || result.limbs[i] < other.limbs[i] ? 1 : 0);
-    //     }
-    //     return result;
-    // }
-};
+//     // __device__ __forceinline__
+//     // uint254 operator+(const uint254& other) const {
+//     //     uint254 result;
+//     //     std::uint64_t carry = 0;
+//     //     for (int i = 0; i < 4; i++) {
+//     //         result.limbs[i] = limbs[i] + other.limbs[i] + carry;
+//     //         carry = (result.limbs[i] < limbs[i] || result.limbs[i] < other.limbs[i] ? 1 : 0);
+//     //     }
+//     //     return result;
+//     // }
+// };
 
 /*
  * var is the basic register type that we deal with. The interpretation of 
  * such registers is determined by the struct used, e.g. digit and fixnum
  */
-typedef uint254 var;
+typedef std::uint64_t var;
 
 struct digit {
     // Add the values of two variables 'a' and 'b' and stores the result in 's'
@@ -47,23 +47,23 @@ struct digit {
         s = a + b;
     }
 
-    struct add_functor {
-        __device__ __forceinline__
-        var operator()(const var &a, const var &b) const {
-            var s;
-            digit::add(s, a, b);
-            return s;
-        }
-    }
+    // struct add_functor {
+    //     __device__ __forceinline__
+    //     var operator()(const var &a, const var &b) const {
+    //         var s;
+    //         digit::add(s, a, b);
+    //         return s;
+    //     }
+    // }
 
-    void add_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &s) {
-        thrust::transform(
-            thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end())),
-            s.begin(),
-            add_functor()
-        );
-    }
+    // void add_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &s) {
+    //     thrust::transform(
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end())),
+    //         s.begin(),
+    //         add_functor()
+    //     );
+    // }
 
     // Add the values of two variables 'a' and b and stores the result in 's' 
     // Store the carry bit in variable 'cy'
@@ -73,24 +73,24 @@ struct digit {
         cy = s < a;
     }
 
-    struct add_cy_functor {
-        __device__ __forceinline__
-        thrust::tuple<var, int> operator()(const var &a, const var &b) const {
-            var s;
-            int cy;
-            digit::add_cy(s, cy, a, b);
-            return thrust::make_tuple(s, cy);
-        }
-    }
+    // struct add_cy_functor {
+    //     __device__ __forceinline__
+    //     thrust::tuple<var, int> operator()(const var &a, const var &b) const {
+    //         var s;
+    //         int cy;
+    //         digit::add_cy(s, cy, a, b);
+    //         return thrust::make_tuple(s, cy);
+    //     }
+    // }
 
-    void add_cy_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &s, thrust::device_vector<int> &cy) {
-        thrust::transform(
-            thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end())),
-            thrust::make_zip_iterator(thrust::make_tuple(s.begin(), cy.begin())),
-            add_cy_functor()
-        );
-    }
+    // void add_cy_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &s, thrust::device_vector<int> &cy) {
+    //     thrust::transform(
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(s.begin(), cy.begin())),
+    //         add_cy_functor()
+    //     );
+    // }
 
     // Subtract the value of one variable 'b' from 'a' and stores the result in 'd'
     __device__ __forceinline__
@@ -98,23 +98,23 @@ struct digit {
         d = a - b;
     }
 
-    struct sub_functor {
-        __device__ __forceinline__
-        var operator()(const var &a, const var &b) const {
-            var d;
-            digit::sub(d, a, b);
-            return d;
-        }
-    }   
+    // struct sub_functor {
+    //     __device__ __forceinline__
+    //     var operator()(const var &a, const var &b) const {
+    //         var d;
+    //         digit::sub(d, a, b);
+    //         return d;
+    //     }
+    // }   
 
-    void sub_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &d) {
-        thrust::transform(
-            thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end())),
-            d.begin(),
-            sub_functor()
-        );
-    }
+    // void sub_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &d) {
+    //     thrust::transform(
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end())),
+    //         d.begin(),
+    //         sub_functor()
+    //     );
+    // }
 
     // Subtract the value of variable 'b' from 'a' and stores the result in 'd'
     // Store the borrow bit in variable 'br'
@@ -124,84 +124,84 @@ struct digit {
         br = d > a;
     }
 
-    struct sub_br_functor {
-        __device__ __forceinline__
-        thrust::tuple<var, int> operator()(const var &a, const var &b) const {
-            var d;
-            int br;
-            digit::sub_br(d, br, a, b);
-            return thrust::make_tuple(d, br);
-        }
-    }
+    // struct sub_br_functor {
+    //     __device__ __forceinline__
+    //     thrust::tuple<var, int> operator()(const var &a, const var &b) const {
+    //         var d;
+    //         int br;
+    //         digit::sub_br(d, br, a, b);
+    //         return thrust::make_tuple(d, br);
+    //     }
+    // }
 
-    void sub_br_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &d, thrust::device_vector<int> &br) {
-        thrust::transform(
-            thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end())),
-            thrust::make_zip_iterator(thrust::make_tuple(d.begin(), br.begin())),
-            sub_br_functor()
-        );
-    }
+    // void sub_br_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &d, thrust::device_vector<int> &br) {
+    //     thrust::transform(
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(d.begin(), br.begin())),
+    //         sub_br_functor()
+    //     );
+    // }
 
     // Return zero value of the var type
     __device__ __forceinline__
     static var zero() { return 0ULL; }
 
-    struct zero_functor {
-        __device__ __forceinline__
-        var operator()() const {
-            return digit::zero();
-        }
-    }
+    // struct zero_functor {
+    //     __device__ __forceinline__
+    //     var operator()() const {
+    //         return digit::zero();
+    //     }
+    // }
 
-    void zero_thrust(thrust::device_vector<var> &z) {
-        thrust::fill(z.begin(), z.end(), 0ULL);
-    }
+    // void zero_thrust(thrust::device_vector<var> &z) {
+    //     thrust::fill(z.begin(), z.end(), 0ULL);
+    // }
 
     // Return true if variable 'a' is equal to the maximum value of the var type, and false otherwise
     __device__ __forceinline__
     static int is_max(var a) { return a == ~0ULL; }
 
-    struct is_max_functor {
-        __device__ __forceinline__
-        int operator()(const var &a) const {
-            return digit::is_max(a);
-        }
-    }
+    // struct is_max_functor {
+    //     __device__ __forceinline__
+    //     int operator()(const var &a) const {
+    //         return digit::is_max(a);
+    //     }
+    // }
 
-    void is_max_thrust(thrust::device_vector<var> &a, thrust::device_vector<int> &res) {
-        thrust::transform(a.begin(), a.end(), res.begin(), is_max_functor());
-    }
+    // void is_max_thrust(thrust::device_vector<var> &a, thrust::device_vector<int> &res) {
+    //     thrust::transform(a.begin(), a.end(), res.begin(), is_max_functor());
+    // }
 
     // Return true if variable 'a' is equal to the minimum value of the var type, and false otherwise
     __device__ __forceinline__
     static int is_min(var a) { return a == 0ULL; }
 
-    struct is_min_functor {
-        __device__ __forceinline__
-        int operator()(const var &a) const {
-            return digit::is_min(a);
-        }
-    }
+    // struct is_min_functor {
+    //     __device__ __forceinline__
+    //     int operator()(const var &a) const {
+    //         return digit::is_min(a);
+    //     }
+    // }
 
-    void is_min_thrust(thrust::device_vector<var> &a, thrust::device_vector<int> &res) {
-        thrust::transform(a.begin(), a.end(), res.begin(), is_min_functor());
-    }
+    // void is_min_thrust(thrust::device_vector<var> &a, thrust::device_vector<int> &res) {
+    //     thrust::transform(a.begin(), a.end(), res.begin(), is_min_functor());
+    // }
 
     // Return true if variable 'a' is equal to zero, and false otherwise
     __device__ __forceinline__
     static int is_zero(var a) { return a == zero(); }
 
-    struct is_zero_functor {
-        __device__ __forceinline__
-        int operator()(const var &a) const {
-            return digit::is_zero(a);
-        }
-    }
+    // struct is_zero_functor {
+    //     __device__ __forceinline__
+    //     int operator()(const var &a) const {
+    //         return digit::is_zero(a);
+    //     }
+    // }
 
-    void is_zero_thrust(thrust::device_vector<var> &a, thrust::device_vector<int> &res) {
-        thrust::transform(a.begin(), a.end(), res.begin(), is_zero_functor());
-    }
+    // void is_zero_thrust(thrust::device_vector<var> &a, thrust::device_vector<int> &res) {
+    //     thrust::transform(a.begin(), a.end(), res.begin(), is_zero_functor());
+    // }
 
     // Multiply two variables 'a' and 'b' and stores the lower 64 bits of the result in 'lo'
     __device__ __forceinline__
@@ -209,23 +209,23 @@ struct digit {
         lo = a * b;
     }
 
-    struct mul_lo_functor {
-        __device__ __forceinline__
-        var operator()(const var &a, const var &b) const {
-            var lo;
-            digit::mul_lo(lo, a, b);
-            return lo;
-        }
-    }
+    // struct mul_lo_functor {
+    //     __device__ __forceinline__
+    //     var operator()(const var &a, const var &b) const {
+    //         var lo;
+    //         digit::mul_lo(lo, a, b);
+    //         return lo;
+    //     }
+    // }
 
-    void mul_lo_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &lo) {
-        thrust::transform(
-            thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end())),
-            lo.begin(),
-            mul_lo_functor()
-        );
-    }
+    // void mul_lo_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &lo) {
+    //     thrust::transform(
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end())),
+    //         lo.begin(),
+    //         mul_lo_functor()
+    //     );
+    // }
 
     // Compute the result of the operation a * b + c and stores the lower 64 bits in 'lo'
     // lo = a * b + c (mod 2^64)
@@ -234,23 +234,23 @@ struct digit {
         internal::mad_lo(lo, a, b, c);
     }
 
-    struct mad_lo_functor {
-        __device__ __forceinline__
-        var operator()(const var &a, const var &b, const var &c) const {
-            var lo;
-            digit::mad_lo(lo, a, b, c);
-            return lo;
-        }
-    }
+    // struct mad_lo_functor {
+    //     __device__ __forceinline__
+    //     var operator()(const var &a, const var &b, const var &c) const {
+    //         var lo;
+    //         digit::mad_lo(lo, a, b, c);
+    //         return lo;
+    //     }
+    // }
 
-    void mad_lo_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &c, thrust::device_vector<var> &lo) {
-        thrust::transform(
-            thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin(), c.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end(), c.end())),
-            lo.begin(),
-            mad_lo_functor()
-        );
-    }
+    // void mad_lo_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &c, thrust::device_vector<var> &lo) {
+    //     thrust::transform(
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin(), c.begin())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end(), c.end())),
+    //         lo.begin(),
+    //         mad_lo_functor()
+    //     );
+    // }
 
     // Compute the result of the operation a * b + c and stores the lower 64 bits in 'lo'
     // Increment the value of 'cy' by the mad carry
@@ -260,24 +260,24 @@ struct digit {
         internal::addc(cy, cy, 0);
     }
 
-    struct mad_lo_cy_functor {
-        __device__ __forceinline__
-        thrust::tuple<var, int> operator()(const var &a, const var &b, const var &c) const {
-            var lo;
-            int cy;
-            digit::mad_lo_cy(lo, cy, a, b, c);
-            return thrust::make_tuple(lo, cy);
-        }
-    }
+    // struct mad_lo_cy_functor {
+    //     __device__ __forceinline__
+    //     thrust::tuple<var, int> operator()(const var &a, const var &b, const var &c) const {
+    //         var lo;
+    //         int cy;
+    //         digit::mad_lo_cy(lo, cy, a, b, c);
+    //         return thrust::make_tuple(lo, cy);
+    //     }
+    // }
 
-    void mad_lo_cy_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &c, thrust::device_vector<var> &lo, thrust::device_vector<int> &cy) {
-        thrust::transform(
-            thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin(), c.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end(), c.end())),
-            thrust::make_zip_iterator(thrust::make_tuple(lo.begin(), cy.begin())),
-            mad_lo_cy_functor()
-        );
-    }
+    // void mad_lo_cy_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &c, thrust::device_vector<var> &lo, thrust::device_vector<int> &cy) {
+    //     thrust::transform(
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin(), c.begin())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end(), c.end())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(lo.begin(), cy.begin())),
+    //         mad_lo_cy_functor()
+    //     );
+    // }
 
     // Compute the result of the operation a * b + c and stores the upper 64 bits in 'hi'
     __device__ __forceinline__
@@ -285,23 +285,23 @@ struct digit {
         internal::mad_hi(hi, a, b, c);
     }
 
-    struct mad_hi_functor {
-        __device__ __forceinline__
-        var operator()(const var &a, const var &b, const var &c) const {
-            var hi;
-            digit::mad_hi(hi, a, b, c);
-            return hi;
-        }
-    }
+    // struct mad_hi_functor {
+    //     __device__ __forceinline__
+    //     var operator()(const var &a, const var &b, const var &c) const {
+    //         var hi;
+    //         digit::mad_hi(hi, a, b, c);
+    //         return hi;
+    //     }
+    // }
 
-    void mad_hi_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &c, thrust::device_vector<var> &hi) {
-        thrust::transform(
-            thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin(), c.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end(), c.end())),
-            hi.begin(),
-            mad_hi_functor()
-        );
-    }
+    // void mad_hi_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &c, thrust::device_vector<var> &hi) {
+    //     thrust::transform(
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin(), c.begin())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end(), c.end())),
+    //         hi.begin(),
+    //         mad_hi_functor()
+    //     );
+    // }
 
     // Compute the result of the operation a * b + c and stores the upper 64 bits in 'hi'
     // Increment the value of 'cy' by the mad carry
@@ -311,24 +311,24 @@ struct digit {
         internal::addc(cy, cy, 0);
     }
 
-    struct mad_hi_cy_functor {
-        __device__ __forceinline__
-        thrust::tuple<var, int> operator()(const var &a, const var &b, const var &c) const {
-            var hi;
-            int cy;
-            digit::mad_hi_cy(hi, cy, a, b, c);
-            return thrust::make_tuple(hi, cy);
-        }
-    }
+    // struct mad_hi_cy_functor {
+    //     __device__ __forceinline__
+    //     thrust::tuple<var, int> operator()(const var &a, const var &b, const var &c) const {
+    //         var hi;
+    //         int cy;
+    //         digit::mad_hi_cy(hi, cy, a, b, c);
+    //         return thrust::make_tuple(hi, cy);
+    //     }
+    // }
 
-    void mad_hi_cy_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &c, thrust::device_vector<var> &hi, thrust::device_vector<int> &cy) {
-        thrust::transform(
-            thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin(), c.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end(), c.end())),
-            thrust::make_zip_iterator(thrust::make_tuple(hi.begin(), cy.begin())),
-            mad_hi_cy_functor()
-        );
-    }
+    // void mad_hi_cy_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &c, thrust::device_vector<var> &hi, thrust::device_vector<int> &cy) {
+    //     thrust::transform(
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.begin(), b.begin(), c.begin())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(a.end(), b.end(), c.end())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(hi.begin(), cy.begin())),
+    //         mad_hi_cy_functor()
+    //     );
+    // }
 };
 
 struct fixnum {
@@ -347,9 +347,9 @@ struct fixnum {
         return digit::zero(); 
     }
 
-    void zero_thrust(thrust::device_vector<var> &z) {
-        thrust::fill(z.begin(), z.end(), digit::zero());
-    }
+    // void zero_thrust(thrust::device_vector<var> &z) {
+    //     thrust::fill(z.begin(), z.end(), digit::zero());
+    // }
 
     // Return one value of var type
     __device__ __forceinline__
@@ -370,24 +370,24 @@ struct fixnum {
         digit::add(r, r, r_cy);
     }
 
-    struct add_cy_functor {
-        __device__ __forceinline__
-        void operator()(thrust::tuple<var&, int&, const var&, const var&> t) {
-            var &r = thrust::get<0>(t);
-            int &cy_hi = thrust::get<1>(t);
-            const var &a = thrust::get<2>(t);
-            const var &b = thrust::get<3>(t);
-            digit::add_cy(r, cy_hi, a, b);
-        }
-    }
+    // struct add_cy_functor {
+    //     __device__ __forceinline__
+    //     void operator()(thrust::tuple<var&, int&, const var&, const var&> t) {
+    //         var &r = thrust::get<0>(t);
+    //         int &cy_hi = thrust::get<1>(t);
+    //         const var &a = thrust::get<2>(t);
+    //         const var &b = thrust::get<3>(t);
+    //         digit::add_cy(r, cy_hi, a, b);
+    //     }
+    // }
 
-    void add_cy_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &r, thrust::device_vector<int> &cy_hi) {
-        thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(r.begin(), cy_hi.begin(), a.begin(), b.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(r.end(), cy_hi.end(), a.end(), b.end())),
-            add_cy_functor()
-        );
-    }
+    // void add_cy_thrust(thrust::device_vector<var> &a, thrust::device_vector<var> &b, thrust::device_vector<var> &r, thrust::device_vector<int> &cy_hi) {
+    //     thrust::for_each(
+    //         thrust::make_zip_iterator(thrust::make_tuple(r.begin(), cy_hi.begin(), a.begin(), b.begin())),
+    //         thrust::make_zip_iterator(thrust::make_tuple(r.end(), cy_hi.end(), a.end(), b.end())),
+    //         add_cy_functor()
+    //     );
+    // }
 
     // Add the values of two variables 'a' and 'b' and stores the result in a third variable 'r' 
     // If the result of the addition overflows, it is propagated to the next higher digit

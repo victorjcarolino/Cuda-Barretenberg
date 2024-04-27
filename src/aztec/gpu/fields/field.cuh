@@ -1,3 +1,6 @@
+#ifndef FIELD_CUH
+#define FIELD_CUH
+
 #include <cstdint>
 #include <stdio.h>
 #include <cstdio>
@@ -79,7 +82,7 @@ __device__ __constant__ var ONE_MONT[LIMBS] = {
 };
 
 /**
- * -Q^{-1} (mod 2^256)
+ * -Q^{-1} (mod 2^64)
  */ 
 __device__ __constant__ var r_inv_base = 0x87d20782e4866389UL;
 
@@ -165,7 +168,7 @@ __device__ __constant__ var endo_b2_lo_scalar = 0x89d3256894d213e3UL;
 __device__ __constant__ var endo_b2_mid_scalar = 0UL;
 
 /**
- * -Q^{-1} (mod 2^256)
+ * -Q^{-1} (mod 2^64)
  */
 __device__ __constant__ var r_inv_scalar = 0xc2e1f593efffffffUL;
 
@@ -227,3 +230,5 @@ typedef field_gpu<BN254_MOD_BASE> fq_gpu;
 typedef field_gpu<BN254_MOD_SCALAR> fr_gpu;
 
 }
+
+#endif /* FIELD_CUH */

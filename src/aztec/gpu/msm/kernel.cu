@@ -94,7 +94,7 @@ __global__ void sum_reduction_kernel(g1_gpu::element *points, g1_gpu::element *r
                 partial_sum[subgroup].z.data[tid % 4]
             );
         }
-        __syncthreads();
+        __syncthreads(); // this is what we are trying to avoid
         t -= t / 2;
     }
 
@@ -192,23 +192,20 @@ __global__ void initialize_buckets_kernel(g1_gpu::element *bucket) {
     fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].z.data[tid % 4]);
 }
 
-__global__ void initialize_buckets_kernel_thrust(g1_gpu::element *bucket) {     
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+// __global__ void initialize_buckets_kernel_thrust(g1_gpu::element *bucket) {  
+//     int tid = blockIdx.x * blockDim.x + threadIdx.x;   
     
-    // // Parameters for coperative groups
-    // auto grp = fixnum::layout();
-    // int subgroup = grp.meta_group_rank();
-    // int subgroup_size = grp.meta_group_size();
-
-    fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].x.data[tid % 4]);
-    fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].y.data[tid % 4]);
-    fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].z.data[tid % 4]);
-}
+//     // set bucket[i].x.data
+//     fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].x.data[tid % 4]);
+//     fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].y.data[tid % 4]);
+//     fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].z.data[tid % 4]);
+// }
 
 
 
 /**
  * Scalar digit decomposition 
+ * Convert this to a thrust transform functor
  */
 __device__ __forceinline__ uint64_t decompose_scalar_digit(fr_gpu scalar, unsigned num, unsigned width) {    
     // Determine which 64-bit limb to access 
@@ -230,6 +227,7 @@ __device__ __forceinline__ uint64_t decompose_scalar_digit(fr_gpu scalar, unsign
 
 /**
  * Decompose b-bit scalar into c-bit scalar, where c <= b
+ * Convert to thrust
  */
 __global__ void split_scalars_kernel
 (unsigned *bucket_indices, unsigned *point_indices, fr_gpu *scalars, unsigned npoints, unsigned num_bucket_modules, unsigned c) {         
@@ -239,6 +237,7 @@ __global__ void split_scalars_kernel
 
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
+    // "num_bucket_modules" = #windows
     for (int i = 0; i < num_bucket_modules; i++) {
         bucket_index = decompose_scalar_digit(scalars[tid], i, c);
         current_index = i * npoints + tid; 
@@ -248,6 +247,8 @@ __global__ void split_scalars_kernel
         point_indices[current_index] = tid;
     }
 }
+
+// Instead of accessing scalars[tid], we'll use thrust to iterate of the scalars vector
 
 /**
  * Accumulation kernel adds up points in each bucket -- this can be swapped out for efficient sum reduction kernel (tree reduction method)
@@ -679,6 +680,25 @@ __global__ void affine_to_jacobian(g1_gpu::affine_element *a_point, g1_gpu::elem
     );
     fq_gpu::load(field_gpu<fq_gpu>::one().data[tid % 4], j_point[(subgroup + (subgroup_size * blockIdx.x))].z.data[tid % 4]);
 }
+
+// __global__ void affine_to_jacobian_thrust(g1_gpu::affine_element *a_point, g1_gpu::element *j_point, size_t npoints) {     
+//     int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+//      // Parameters for coperative groups
+//     auto grp = fixnum::layout();
+//     int subgroup = grp.meta_group_rank();
+//     int subgroup_size = grp.meta_group_size();
+
+//     fq_gpu::load(
+//         a_point[(subgroup + (subgroup_size * blockIdx.x))].x.data[tid % 4], 
+//         j_point[(subgroup + (subgroup_size * blockIdx.x))].x.data[tid % 4]
+//     );
+//     fq_gpu::load(
+//         a_point[(subgroup + (subgroup_size * blockIdx.x))].y.data[tid % 4], 
+//         j_point[(subgroup + (subgroup_size * blockIdx.x))].y.data[tid % 4]
+//     );
+//     fq_gpu::load(field_gpu<fq_gpu>::one().data[tid % 4], j_point[(subgroup + (subgroup_size * blockIdx.x))].z.data[tid % 4]);
+// }
 
 /**
  * Compare group elements kernel

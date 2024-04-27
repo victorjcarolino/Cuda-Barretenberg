@@ -30,6 +30,7 @@ namespace internal {
     }; */
 
     // Add two 32-bit signed integers and set carry flag on overflow ('s' > INT_MAX)
+    __device__ __forceinline__
     void addc(i32 &s, i32 a, i32 b) {
         asm ("addc.s32 %0, %1, %2;"
              : "=r"(s)
@@ -127,27 +128,27 @@ namespace internal {
              : "r"(a), "r"(b));
     }
 
-    struct mul_wide_functor {
-        __device__ __forceinline__ 
-        thrust::tuple<u32, u32> operator() (const thrust::tuple<u32, u32>& input) {
-            u32 hi, lo;
-            asm ("{\n\t"
-                 " .reg .u64 tmp;\n\t"
-                 " mul.wide.u32 tmp, %2, %3;\n\t"
-                 " mov.b64 { %1, %0 }, tmp;\n\t"
-                 "}"
-                 : "=r"(hi), "=r"(lo)
-                 : "r"(thrust::get<0>(input)), "r"(thrust::get<1>(input)));
-            return thrust::make_tuple(hi, lo);
-        }
-    }
+    // struct mul_wide_functor {
+    //     __device__ __forceinline__ 
+    //     thrust::tuple<u32, u32> operator() (const thrust::tuple<u32, u32>& input) {
+    //         u32 hi, lo;
+    //         asm ("{\n\t"
+    //              " .reg .u64 tmp;\n\t"
+    //              " mul.wide.u32 tmp, %2, %3;\n\t"
+    //              " mov.b64 { %1, %0 }, tmp;\n\t"
+    //              "}"
+    //              : "=r"(hi), "=r"(lo)
+    //              : "r"(thrust::get<0>(input)), "r"(thrust::get<1>(input)));
+    //         return thrust::make_tuple(hi, lo);
+    //     }
+    // };
 
-    void mul_wide_thrust(thrust::device_vector<u32>& d_input1, thrust::device_vector<u32>& d_input2, thrust::device_vector<u32>& d_output1, thrust::device_vector<u32>& d_output2) {
-        thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin())),
-                          thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end())),
-                          thrust::make_zip_iterator(thrust::make_tuple(d_output1.begin(), d_output2.begin())),
-                          mul_wide_functor());
-    }
+    // void mul_wide_thrust(thrust::device_vector<u32>& d_input1, thrust::device_vector<u32>& d_input2, thrust::device_vector<u32>& d_output1, thrust::device_vector<u32>& d_output2) {
+    //     thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin())),
+    //                       thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end())),
+    //                       thrust::make_zip_iterator(thrust::make_tuple(d_output1.begin(), d_output2.begin())),
+    //                       mul_wide_functor());
+    // }
 
     __device__ __forceinline__
     void mul_wide(u64 &hi, u64 &lo, u64 a, u64 b) {
@@ -157,24 +158,24 @@ namespace internal {
              : "l"(a), "l"(b));
     }
 
-    struct mul_wide_functor {
-        __device__ __forceinline__ 
-        thrust::tuple<u64, u64> operator() (const thrust::tuple<u64, u64>& input) {
-            u64 hi, lo;
-            asm ("mul.hi.u64 %0, %2, %3;\n\t"
-                 "mul.lo.u64 %1, %2, %3;"
-                 : "=l"(hi), "=l"(lo)
-                 : "l"(thrust::get<0>(input)), "l"(thrust::get<1>(input)));
-            return thrust::make_tuple(hi, lo);
-        }
-    }
+    // struct mul_wide_functor {
+    //     __device__ __forceinline__ 
+    //     thrust::tuple<u64, u64> operator() (const thrust::tuple<u64, u64>& input) {
+    //         u64 hi, lo;
+    //         asm ("mul.hi.u64 %0, %2, %3;\n\t"
+    //              "mul.lo.u64 %1, %2, %3;"
+    //              : "=l"(hi), "=l"(lo)
+    //              : "l"(thrust::get<0>(input)), "l"(thrust::get<1>(input)));
+    //         return thrust::make_tuple(hi, lo);
+    //     }
+    // }
 
-    void mul_wide_thrust(thrust::device_vector<u64>& d_input1, thrust::device_vector<u64>& d_input2, thrust::device_vector<u64>& d_output1, thrust::device_vector<u64>& d_output2) {
-        thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin())),
-                          thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end())),
-                          thrust::make_zip_iterator(thrust::make_tuple(d_output1.begin(), d_output2.begin())),
-                          mul_wide_functor());
-    }
+    // void mul_wide_thrust(thrust::device_vector<u64>& d_input1, thrust::device_vector<u64>& d_input2, thrust::device_vector<u64>& d_output1, thrust::device_vector<u64>& d_output2) {
+    //     thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin())),
+    //                       thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end())),
+    //                       thrust::make_zip_iterator(thrust::make_tuple(d_output1.begin(), d_output2.begin())),
+    //                       mul_wide_functor());
+    // }
 
     // lo = a * b + c (mod 2^n)
     __device__ __forceinline__
@@ -184,23 +185,23 @@ namespace internal {
              : "r"(a), "r" (b), "r"(c));
     }
 
-    struct mad_lo_functor {
-        __device__ __forceinline__ 
-        u32 operator() (const thrust::tuple<u32, u32, u32>& input) {
-            u32 lo;
-            asm ("mad.lo.u32 %0, %1, %2, %3;"
-                 : "=r"(lo)
-                 : "r"(thrust::get<0>(input)), "r" (thrust::get<1>(input)), "r" (thrust::get<2>(input)));
-            return lo;
-        }
-    }
+    // struct mad_lo_functor {
+    //     __device__ __forceinline__ 
+    //     u32 operator() (const thrust::tuple<u32, u32, u32>& input) {
+    //         u32 lo;
+    //         asm ("mad.lo.u32 %0, %1, %2, %3;"
+    //              : "=r"(lo)
+    //              : "r"(thrust::get<0>(input)), "r" (thrust::get<1>(input)), "r" (thrust::get<2>(input)));
+    //         return lo;
+    //     }
+    // }
 
-    void mad_lo_thrust(thrust::device_vector<u32>& d_input1, thrust::device_vector<u32>& d_input2, thrust::device_vector<u32>& d_input3, thrust::device_vector<u32>& d_output) {
-        thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin(), d_input3.begin())),
-                          thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end(), d_input3.end())),
-                          d_output.begin(),
-                          mad_lo_functor());
-    }
+    // void mad_lo_thrust(thrust::device_vector<u32>& d_input1, thrust::device_vector<u32>& d_input2, thrust::device_vector<u32>& d_input3, thrust::device_vector<u32>& d_output) {
+    //     thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin(), d_input3.begin())),
+    //                       thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end(), d_input3.end())),
+    //                       d_output.begin(),
+    //                       mad_lo_functor());
+    // }
 
     __device__ __forceinline__
     void mad_lo(u64 &lo, u64 a, u64 b, u64 c) {
@@ -218,14 +219,14 @@ namespace internal {
                  : "l"(thrust::get<0>(input)), "l" (thrust::get<1>(input)), "l" (thrust::get<2>(input)));
             return lo;
         }
-    }
+    };
 
-    void mad_lo_thrust(thrust::device_vector<u64>& d_input1, thrust::device_vector<u64>& d_input2, thrust::device_vector<u64>& d_input3, thrust::device_vector<u64>& d_output) {
-        thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin(), d_input3.begin())),
-                          thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end(), d_input3.end())),
-                          d_output.begin(),
-                          mad_lo_functor());
-    }
+    // void mad_lo_thrust(thrust::device_vector<u64>& d_input1, thrust::device_vector<u64>& d_input2, thrust::device_vector<u64>& d_input3, thrust::device_vector<u64>& d_output) {
+    //     thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin(), d_input3.begin())),
+    //                       thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end(), d_input3.end())),
+    //                       d_output.begin(),
+    //                       mad_lo_functor());
+    // }
 
     // as above but with carry in cy
     __device__ __forceinline__
@@ -285,23 +286,23 @@ namespace internal {
              : "r"(a), "r" (b), "r"(c));
     }
 
-    struct mad_hi_functor {
-        __device__ __forceinline__ 
-        u32 operator() (const thrust::tuple<u32, u32, u32>& input) {
-            u32 hi;
-            asm ("mad.hi.u32 %0, %1, %2, %3;"
-                 : "=r"(hi)
-                 : "r"(thrust::get<0>(input)), "r" (thrust::get<1>(input)), "r" (thrust::get<2>(input)));
-            return hi;
-        }
-    }
+    // struct mad_hi_functor {
+    //     __device__ __forceinline__ 
+    //     u32 operator() (const thrust::tuple<u32, u32, u32>& input) {
+    //         u32 hi;
+    //         asm ("mad.hi.u32 %0, %1, %2, %3;"
+    //              : "=r"(hi)
+    //              : "r"(thrust::get<0>(input)), "r" (thrust::get<1>(input)), "r" (thrust::get<2>(input)));
+    //         return hi;
+    //     }
+    // }
 
-    void mad_hi_thrust(thrust::device_vector<u32>& d_input1, thrust::device_vector<u32>& d_input2, thrust::device_vector<u32>& d_input3, thrust::device_vector<u32>& d_output) {
-        thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin(), d_input3.begin())),
-                          thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end(), d_input3.end())),
-                          d_output.begin(),
-                          mad_hi_functor());
-    }
+    // void mad_hi_thrust(thrust::device_vector<u32>& d_input1, thrust::device_vector<u32>& d_input2, thrust::device_vector<u32>& d_input3, thrust::device_vector<u32>& d_output) {
+    //     thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin(), d_input3.begin())),
+    //                       thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end(), d_input3.end())),
+    //                       d_output.begin(),
+    //                       mad_hi_functor());
+    // }
 
     __device__ __forceinline__
     void mad_hi(u64 &hi, u64 a, u64 b, u64 c) {
@@ -310,23 +311,23 @@ namespace internal {
              : "l"(a), "l" (b), "l"(c));
     }
 
-    struct mad_hi_functor {
-        __device__ __forceinline__ 
-        u64 operator() (const thrust::tuple<u64, u64, u64>& input) {
-            u64 hi;
-            asm ("mad.hi.u64 %0, %1, %2, %3;"
-                 : "=l"(hi)
-                 : "l"(thrust::get<0>(input)), "l" (thrust::get<1>(input)), "l" (thrust::get<2>(input)));
-            return hi;
-        }
-    }
+    // struct mad_hi_functor {
+    //     __device__ __forceinline__ 
+    //     u64 operator() (const thrust::tuple<u64, u64, u64>& input) {
+    //         u64 hi;
+    //         asm ("mad.hi.u64 %0, %1, %2, %3;"
+    //              : "=l"(hi)
+    //              : "l"(thrust::get<0>(input)), "l" (thrust::get<1>(input)), "l" (thrust::get<2>(input)));
+    //         return hi;
+    //     }
+    // };
 
-    void mad_hi_thrust(thrust::device_vector<u64>& d_input1, thrust::device_vector<u64>& d_input2, thrust::device_vector<u64>& d_input3, thrust::device_vector<u64>& d_output) {
-        thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin(), d_input3.begin())),
-                          thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end(), d_input3.end())),
-                          d_output.begin(),
-                          mad_hi_functor());
-    }
+    // void mad_hi_thrust(thrust::device_vector<u64>& d_input1, thrust::device_vector<u64>& d_input2, thrust::device_vector<u64>& d_input3, thrust::device_vector<u64>& d_output) {
+    //     thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(d_input1.begin(), d_input2.begin(), d_input3.begin())),
+    //                       thrust::make_zip_iterator(thrust::make_tuple(d_input1.end(), d_input2.end(), d_input3.end())),
+    //                       d_output.begin(),
+    //                       mad_hi_functor());
+    // }
 
     __device__ __forceinline__
     void mad_hi_cc(u32 &hi, u32 a, u32 b, u32 c) {

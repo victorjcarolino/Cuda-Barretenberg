@@ -17,6 +17,10 @@ add_executable(
     fields/field_fq_test.cu
 )
 add_executable(
+    field_fq_test_single
+    fields/field_fq_test_single.cu
+)
+add_executable(
     field_fr_test
     fields/field_fr_test.cu
 )
@@ -45,6 +49,11 @@ add_executable(
 add_custom_target(
     run_field_fq_test
     COMMAND field_fq_test
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+add_custom_target(
+    run_field_fq_test_single
+    COMMAND field_fq_test_single
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 add_custom_target(

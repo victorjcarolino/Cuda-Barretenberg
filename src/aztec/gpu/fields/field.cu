@@ -174,10 +174,7 @@ __device__ __forceinline__ var field_gpu<params>::mul(const var a, const var b, 
         digit::mad_hi_cy(z, cy, mod, u, z);
         // z[L] = higher 64 bits of (y[L]*x[i] + z[L])
         digit::mad_hi_cy(z, cy, y, xi, z);
-
-        printf("TAL %lx %lx %lx %lx\n", grp.shfl(z, 0), grp.shfl(z, 1), grp.shfl(z, 2), grp.shfl(z, 3));
     }
-    printf("\n");
     
     // Resolve carries
     // msb[L] = cy[3] // msb set if most significant limb overflows

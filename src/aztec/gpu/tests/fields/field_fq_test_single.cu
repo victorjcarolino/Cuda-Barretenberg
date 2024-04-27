@@ -15,19 +15,15 @@ __global__ void initialize_mont_mult(uint254 &a, uint254 &b, uint254 &expected) 
     a = { 0x2523b6fa3956f038, 0x158aa08ecdd9ec1d, 0xf48216a4c74738d4, 0x2514cc93d6f0a1bf };
     b = { 0xb68aee5e4c8fc17c, 0xc5193de7f401d5e8, 0xb8777d4dde671db3, 0xe513e75c087b0bb };
     expected = { 0x7ed4174114b521c4, 0x58f5bd1d4279fdc2, 0x6a73ac09ee843d41, 0x687a76ae9b3425c };
-    // printf("yy %lu\n", expected.limbs[0]);
 }
 
 __global__ void mont_mult(uint254 a, uint254 b, uint254 &result) {
-    // printf("??? xx %lu %lu %lu %lu\n", a.limbs[0], a.limbs[1], a.limbs[2], a.limbs[3]);
     fq_single::mul(a, b, result);
 }
 
 /* -------------------------- Montgomery Multiplication Test -- Short Integers ---------------------------------------------- */
 
 __global__ void initialize_mont_mult_short(uint254 &a, uint254 &b, uint254 &expected) {
-    // a = { 0x1, 0, 0, 0 };
-    // b = { 0x1, 0, 0, 0 };
     a = { 0xa, 0, 0, 0 };
     b = { 0xb, 0, 0, 0 };
     expected = { 0x65991a6dc2f3a183, 0xe3ba1f83394a2d08, 0x8401df65a169db3f, 0x1727099643607bba };
@@ -97,6 +93,106 @@ __global__ void sub_check_against_constants(uint254 a, uint254 b, uint254 &resul
     fq_single::sub(a, b, result);
 }
 
+/* -------------------------- Convert To Montgomery Form ---------------------------------------------- */
+
+__global__ void initialize_to_montgomery_form(uint254 &a, uint254 &expected) {
+    a = { 0x01, 0x00, 0x00, 0x00 };
+    expected = { 0xd35d438dc58f0d9d, 0xa78eb28f5c70b3d, 0x666ea36f7879462c, 0xe0a77c19a07df2f };
+
+}
+
+__global__ void to_montgomery_form(uint254 &a, uint254 &result) {
+    fq_single::to_monty(a, result);
+}
+
+/* -------------------------- Convert From Montgomery Form ---------------------------------------------- */
+
+__global__ void initialize_from_montgomery_form(uint254 &a, uint254 &expected) {
+    a = { 0x01, 0x00, 0x00, 0x00 };
+    expected = { 0x01, 0x00, 0x00, 0x00 };
+}
+
+__global__ void from_montgomery_form(uint254 &a, uint254 &result) {
+    fq_single::to_monty(a, result);
+    fq_single::from_monty(result, result);
+}
+
+/* -------------------------- Montgomery Consistency Check ---------------------------------------------- */
+
+__global__ void initialize_montgomery_consistency_check(uint254 &a, uint254 &b) {
+    a = { 0x2523b6fa3956f038, 0x158aa08ecdd9ec1d, 0xf48216a4c74738d4, 0x2514cc93d6f0a1bf };
+    b = { 0xb68aee5e4c8fc17c, 0xc5193de7f401d5e8, 0xb8777d4dde671db3, 0xe513e75c087b0bb };
+}
+
+__global__ void montgomery_consistency_check(uint254 &a, uint254 &b, uint254 &expected, uint254 &result) {
+    uint254 aR;
+    uint254 bR;
+    uint254 aRR;
+    uint254 bRR;
+    uint254 bRRR;
+    uint254 result_a;
+    uint254 result_b;
+    uint254 result_c;
+    uint254 result_d;
+
+    fq_single::to_monty(a, aR);
+    fq_single::to_monty(aR, aRR);
+    fq_single::to_monty(b, bR);
+    fq_single::to_monty(bR, bRR);
+    fq_single::to_monty(bRR, bRRR);
+
+    fq_single::mul(aRR, bRR, result_a); // abRRR
+    fq_single::mul(aR, bRRR, result_b); // abRRR
+    // fq_single::mul(aR, bR, result_c);   // abR
+    fq_single::mul(a, b, result_d);               // abR^-1
+
+    fq_single::from_monty(result_a, result_a);    // abRR
+    fq_single::from_monty(result_a, result_a);    // abR
+    fq_single::from_monty(result_a, result);    // ab
+    // fq_single::from_monty(result_c, result_c);    // ab
+    fq_single::to_monty(result_d, expected);      // ab
+}
+
+/* -------------------------- Add Multiplication Consistency ---------------------------------------------- */
+
+__global__ void initialize_add_mul_consistency(uint254 &a, uint254 &b) {
+    a = { 0x2523b6fa3956f038, 0x158aa08ecdd9ec1d, 0xf48216a4c74738d4, 0x2514cc93d6f0a1bf };
+    b = { 0x09, 0, 0, 0 };
+}
+
+__global__ void add_mul_consistency(uint254 &a, uint254 &b, uint254 &expected, uint254 &res) {
+    uint254 multiplicand;
+
+    fq_single::to_monty(b, multiplicand);
+    fq_single::add(a, a, res);                       // 2
+    fq_single::add(res, res, res);             // 4
+    fq_single::add(res, res, res);             // 8
+    fq_single::add(res, a, res);                  // 9
+
+    fq_single::mul(a, multiplicand, expected);                // 9
+}
+
+/* -------------------------- Subtract Multiplication Consistency ---------------------------------------------- */
+
+__global__ void initialize_sub_mul_consistency(uint254 &a, uint254 &b) {
+    a = { 0x2523b6fa3956f038, 0x158aa08ecdd9ec1d, 0xf48216a4c74738d4, 0x2514cc93d6f0a1bf };
+    b = { 0x05, 0, 0, 0 };
+}
+
+__global__ void sub_mul_consistency(uint254 &a, uint254 &b, uint254 &expected, uint254 &res) {
+    uint254 multiplicand;
+
+    fq_single::to_monty(b, multiplicand);
+    fq_single::add(a, a, res);                       // 2
+    fq_single::add(res, res, res);             // 4
+    fq_single::add(res, res, res);             // 8
+    fq_single::sub(res, a, res);                  // 7
+    fq_single::sub(res, a, res);                  // 6
+    fq_single::sub(res, a, res);                  // 5
+
+    fq_single::mul(a, multiplicand, expected);                // 5
+}
+
 /* -------------------------- Cube Root ---------------------------------------------- */
 
 __global__ void initialize_cube(uint254 &a) {
@@ -113,12 +209,12 @@ __global__ void cube(uint254 &a, uint254 &expected, uint254 &result) {
     fq_single::mul(x_cubed, a, result);
     x_cubed = result;
     
-    fq_single::mul(a, gpu_barretenberg::CUBE_ROOT_BASE, result);
-    beta_x = result;
-    fq_single::mul(beta_x, beta_x, result);
-    beta_x_cubed = result;
-    fq_single::mul(beta_x_cubed, beta_x, result);
-    beta_x_cubed = result;
+    fq_single::mul(a, gpu_barretenberg::CUBE_ROOT_BASE, expected);
+    beta_x = expected;
+    fq_single::mul(beta_x, beta_x, expected);
+    beta_x_cubed = expected;
+    fq_single::mul(beta_x_cubed, beta_x, expected);
+    beta_x_cubed = expected;
 }
 
 /* -------------------------- Executing Initialization and Workload Kernels ---------------------------------------------- */
@@ -138,22 +234,21 @@ void assert_checks(uint254 *expected, uint254 *result) {
     }
     // Assert clause    
     for(int i=0; i<LIMBS_NUM; i++) {
-        // assert(expected->limbs[i] == result->limbs[i]);
         if (expected->limbs[i] != result->limbs[i]) {
             printf("***** BAD!!!\n");
-            break;
         }
+        assert(expected->limbs[i] == result->limbs[i]);
     }
 }
 
 void execute_kernels(uint254 *a, uint254 *b, uint254 *expected, uint254 *result) {    
-    // // Montgomery Multiplication Test 
-    // printf("\n*** mont_mult ***\n");
-    // initialize_mont_mult<<<BLOCKS, THREADS>>>(*a, *b, *expected);
-    // // printf("\n??? zz %lu %lu %lu %lu\n", a->limbs[0], a->limbs[1], a->limbs[2], a->limbs[3]);
-    // cudaDeviceSynchronize();
-    // mont_mult<<<BLOCKS, THREADS>>>(*a, *b, *result);
-    // assert_checks(expected, result);
+    // Montgomery Multiplication Test 
+    printf("\n*** mont_mult ***\n");
+    initialize_mont_mult<<<BLOCKS, THREADS>>>(*a, *b, *expected);
+    // printf("\n??? zz %lu %lu %lu %lu\n", a->limbs[0], a->limbs[1], a->limbs[2], a->limbs[3]);
+    cudaDeviceSynchronize();
+    mont_mult<<<BLOCKS, THREADS>>>(*a, *b, *result);
+    assert_checks(expected, result);
 
     // Montgomery Multiplication Test -- Short Integers 
     printf("\n*** mont_mult short ***\n");
@@ -162,65 +257,75 @@ void execute_kernels(uint254 *a, uint254 *b, uint254 *expected, uint254 *result)
     mont_mult<<<BLOCKS, THREADS>>>(*a, *b, *result);
     assert_checks(expected, result);
 
-    // // Multiply Test - Square Consistency 
-    // printf("\n*** mont_mult sq consistency ***\n");
-    // initialize_mul_square_consistency<<<BLOCKS, THREADS>>>(*a, *b);
-    // cudaDeviceSynchronize();
-    // mul_square_consistency<<<BLOCKS, THREADS>>>(*a, *b, *expected, *result);
-    // assert_checks(expected, result);
+    // Multiply Test - Square Consistency 
+    printf("\n*** mont_mult sq consistency ***\n");
+    initialize_mul_square_consistency<<<BLOCKS, THREADS>>>(*a, *b);
+    cudaDeviceSynchronize();
+    mul_square_consistency<<<BLOCKS, THREADS>>>(*a, *b, *expected, *result);
+    assert_checks(expected, result);
 
-    // // Multiply Test - Square Against Constants 
-    // printf("\n*** mont_mult sq against constants ***\n");
-    // initialize_sqr_check_against_constants<<<BLOCKS, THREADS>>>(*a, *expected);
-    // cudaDeviceSynchronize();
-    // sqr_check_against_constants<<<BLOCKS, THREADS>>>(*a, *result);
-    // assert_checks(expected, result);
+    // Multiply Test - Square Against Constants 
+    printf("\n*** mont_mult sq against constants ***\n");
+    initialize_sqr_check_against_constants<<<BLOCKS, THREADS>>>(*a, *expected);
+    cudaDeviceSynchronize();
+    sqr_check_against_constants<<<BLOCKS, THREADS>>>(*a, *result);
+    assert_checks(expected, result);
 
-    // // Add Test - Check Against Constants
-    // printf("\n*** add check against constants ***\n");
-    // initialize_add_check_against_constants<<<BLOCKS, THREADS>>>(*a, *b, *expected);
-    // cudaDeviceSynchronize();
-    // add_check_against_constants<<<BLOCKS, THREADS>>>(*a, *b, *result);
-    // assert_checks(expected, result);
+    // Add Test - Check Against Constants
+    printf("\n*** add check against constants ***\n");
+    initialize_add_check_against_constants<<<BLOCKS, THREADS>>>(*a, *b, *expected);
+    cudaDeviceSynchronize();
+    add_check_against_constants<<<BLOCKS, THREADS>>>(*a, *b, *result);
+    assert_checks(expected, result);
 
-    // // Subtract Test - Check Against Constant
-    // printf("\n*** sub check against constants ***\n");
-    // initialize_sub_check_against_constants<<<BLOCKS, THREADS>>>(*a, *b, *expected);
-    // cudaDeviceSynchronize();
-    // sub_check_against_constants<<<BLOCKS, THREADS>>>(*a, *b, *result);
-    // assert_checks(expected, result);
+    // Subtract Test - Check Against Constant
+    printf("\n*** sub check against constants ***\n");
+    initialize_sub_check_against_constants<<<BLOCKS, THREADS>>>(*a, *b, *expected);
+    cudaDeviceSynchronize();
+    sub_check_against_constants<<<BLOCKS, THREADS>>>(*a, *b, *result);
+    assert_checks(expected, result);
 
-    // // // Convert To Montgomery Form Test
-    // // initialize_to_montgomery_form<<<BLOCKS, THREADS>>>(*a, *expected);
-    // // to_montgomery_form<<<BLOCKS, THREADS>>>(*a, *result);*
-    // // assert_checks(expected, result);
+    // Convert To Montgomery Form Test
+    printf("\n*** to monty ***\n");
+    initialize_to_montgomery_form<<<BLOCKS, THREADS>>>(*a, *expected);
+    cudaDeviceSynchronize();
+    to_montgomery_form<<<BLOCKS, THREADS>>>(*a, *result);
+    assert_checks(expected, result);
 
-    // // // Convert From Montgomery Form Test
-    // // initialize_from_montgomery_form<<<BLOCKS, THREADS>>>(*a, *expected);
-    // // from_montgomery_form<<<BLOCKS, THREADS>>>(*a, *result);*
-    // // assert_checks(expected, result);
+    // Convert From Montgomery Form Test
+    printf("\n*** from monty ***\n");
+    initialize_from_montgomery_form<<<BLOCKS, THREADS>>>(*a, *expected);
+    cudaDeviceSynchronize();
+    from_montgomery_form<<<BLOCKS, THREADS>>>(*a, *result);
+    assert_checks(expected, result);
 
-    // // // Montgomery Consistency Check Test
-    // // initialize_montgomery_consistency_check<<<BLOCKS, THREADS>>>(*a, *b);*
-    // // montgomery_consistency_check<<<BLOCKS, THREADS>>>(*a, *b, *expected, result);
-    // // assert_checks(expected, result);
+    // Montgomery Consistency Check Test
+    printf("\n*** monty consistency ***\n");
+    initialize_montgomery_consistency_check<<<BLOCKS, THREADS>>>(*a, *b);
+    cudaDeviceSynchronize();
+    montgomery_consistency_check<<<BLOCKS, THREADS>>>(*a, *b, *expected, *result);
+    assert_checks(expected, result);
 
-    // // // Add Multiplication Consistency Test
-    // // initialize_add_mul_consistency<<<BLOCKS, THREADS>>>(*a, *b);*
-    // // add_mul_consistency<<<BLOCKS, THREADS>>>(*a, *b, *expected, result);
-    // // assert_checks(expected, result);
+    // Add Multiplication Consistency Test
+    printf("\n*** add mul consistency ***\n");
+    initialize_add_mul_consistency<<<BLOCKS, THREADS>>>(*a, *b);
+    cudaDeviceSynchronize();
+    add_mul_consistency<<<BLOCKS, THREADS>>>(*a, *b, *expected, *result);
+    assert_checks(expected, result);
 
-    // // // Subtract Multiplication Consistency test
-    // // initialize_sub_mul_consistency<<<BLOCKS, THREADS>>>(*a, *b);*
-    // // sub_mul_consistency<<<BLOCKS, THREADS>>>(*a, *b, *expected, result);
-    // // assert_checks(expected, result);
+    // Subtract Multiplication Consistency test
+    printf("\n*** sub mul consistency ***\n");
+    initialize_sub_mul_consistency<<<BLOCKS, THREADS>>>(*a, *b);
+    cudaDeviceSynchronize();
+    sub_mul_consistency<<<BLOCKS, THREADS>>>(*a, *b, *expected, *result);
+    assert_checks(expected, result);
 
-    // // Cube Root Test
-    // printf("\n*** cube root ***\n");
-    // initialize_cube<<<BLOCKS, THREADS>>>(*a);
-    // cudaDeviceSynchronize();
-    // cube<<<BLOCKS, THREADS>>>(*a, *expected, *result);
-    // assert_checks(expected, result);
+    // Cube Root Test
+    printf("\n*** cube root ***\n");
+    initialize_cube<<<BLOCKS, THREADS>>>(*a);
+    cudaDeviceSynchronize();
+    cube<<<BLOCKS, THREADS>>>(*a, *expected, *result);
+    assert_checks(expected, result);
 }
 
 /* -------------------------- Main Entry Function ---------------------------------------------- */

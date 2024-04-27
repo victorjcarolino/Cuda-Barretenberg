@@ -255,9 +255,9 @@ class field_single {
 
         __device__ __forceinline__ static void mul(const uint254 a, const uint254 b, uint254 &res);
 
-        // __device__ __forceinline__ static var to_monty(var x, var &res);
+        __device__ __forceinline__ static void to_monty(uint254 x, uint254 &resf);
         
-        // __device__ __forceinline__ static var from_monty(var x, var &res);
+        __device__ __forceinline__ static void from_monty(uint254 x, uint254 &resf);
         
         // __device__ __forceinline__ static var neg(var &x, var &res);
 };

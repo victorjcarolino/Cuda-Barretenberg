@@ -37,9 +37,8 @@ __device__ __forceinline__ void field_single<params>::add(const uint254 a, const
         (res.limbs[1] > p[1]) ? true :
         (res.limbs[1] < p[1]) ? false :
         (res.limbs[0] >= p[0]);
-    if (!res_ge_p) 
-        
-    printf("    xx %lu %lu %lu\n", a.limbs[0], b.limbs[0], res.limbs[0]);
+    if (res_ge_p)
+        sub_inplace(res, p);
 } 
 
 template<class params>
@@ -139,17 +138,17 @@ __device__ __forceinline__ void field_single<params>::mul(const uint254 af, cons
 
     for (int i = 0; i < 4; i++) {
         asm(
-            "mad.lo.cc.u64 %0, %11, %12, %6;\n\t"   // T[0] = a[i]*b[0] + T[0];
-            "madc.lo.cc.u64 %1, %11, %13, %7;\n\t"  // T[1] = a[i]*b[1] + T[1];
-            "madc.lo.cc.u64 %2, %11, %14, %8;\n\t"  // T[2] = a[i]*b[2] + T[2];
-            "madc.lo.cc.u64 %3, %11, %15, %9;\n\t"  // T[3] = a[i]*b[3] + T[3];
-            "addc.cc.u64 %4, %10, 0;\n\t"           //
-            "addc.u64 %5, 0, 0;\n\t"                //
-            "mad.hi.cc.u64 %1, %11, %12, %1;\n\t"   //
-            "madc.hi.cc.u64 %2, %11, %13, %2;\n\t"  //
-            "madc.hi.cc.u64 %3, %11, %14, %3;\n\t"  //
-            "madc.hi.cc.u64 %4, %11, %15, %4;\n\t"  //
-            "addc.u64 %5, 0, 0;"
+            "mad.lo.cc.u64 %0, %11, %12, %6;\n\t"   // T[0] = {a[i]*b[0]}.lo + T[0]
+            "madc.lo.cc.u64 %1, %11, %13, %7;\n\t"  // T[1] = {a[i]*b[1]}.lo + T[1] + cf
+            "madc.lo.cc.u64 %2, %11, %14, %8;\n\t"  // T[2] = {a[i]*b[2]}.lo + T[2] + cf
+            "madc.lo.cc.u64 %3, %11, %15, %9;\n\t"  // T[3] = {a[i]*b[3]}.lo + T[3] + cf
+            "addc.cc.u64 %4, %10, 0;\n\t"           // T[4] = T[4] + cf
+            "addc.u64 %5, 0, 0;\n\t"                // T[5] = cf
+            "mad.hi.cc.u64 %1, %11, %12, %1;\n\t"   // T[1] += {a[i]*b[0]}.hi
+            "madc.hi.cc.u64 %2, %11, %13, %2;\n\t"  // T[2] += {a[i]*b[1]}.hi + cf
+            "madc.hi.cc.u64 %3, %11, %14, %3;\n\t"  // T[3] += {a[i]*b[2]}.hi + cf
+            "madc.hi.cc.u64 %4, %11, %15, %4;\n\t"  // T[4] += {a[i]*b[3]}.hi + cf
+            "addc.u64 %5, %5, 0;"                   // T[5] += cf
             : "=l"(T[0]), "=l"(T[1]), "=l"(T[2]), "=l"(T[3]), "=l"(T[4]), "=l"(T[5])
               // 6
             : "l"(T[0]), "l"(T[1]), "l"(T[2]), "l"(T[3]), "l"(T[4]),
@@ -162,7 +161,7 @@ __device__ __forceinline__ void field_single<params>::mul(const uint254 af, cons
         var m = T[0] * r_inv;
         asm(
             "{\n\t"
-            " .reg .u64 tmp;"
+            " .reg .u64 tmp;"                        // var tmp;
             " mad.lo.cc.u64 tmp, %11, %12, %5;\n\t"  // tmp = {m*p[0]}.lo + T[0]
             " madc.lo.cc.u64 %0, %11, %13, %6;\n\t"  // T[0] = {m*p[1]}.lo + T[1] + cf
             " madc.lo.cc.u64 %1, %11, %14, %7;\n\t"  // T[1] = {m*p[2]}.lo + T[2] + cf
@@ -184,9 +183,7 @@ __device__ __forceinline__ void field_single<params>::mul(const uint254 af, cons
               "l"(p[0]), "l"(p[1]), "l"(p[2]), "l"(p[3])
         );
     }
-    printf("\n");
 
-    // uint254 resf {T[0], T[1], T[2], T[3]};
     resf.limbs[0] = T[0];
     resf.limbs[1] = T[1];
     resf.limbs[2] = T[2];
@@ -229,4 +226,21 @@ __device__ __forceinline__ void field_single<params>::neg(uint254 &resf) {
         uint254 p {gpu_barretenberg::MOD_Q_SCALAR[0], gpu_barretenberg::MOD_Q_SCALAR[1], gpu_barretenberg::MOD_Q_SCALAR[2], gpu_barretenberg::MOD_Q_SCALAR[3]};
         sub(p, x, resf);
     }
+}
+
+template<class params>
+__device__ __forceinline__ void field_single<params>::to_monty(uint254 x, uint254 &resf) {
+    if (std::is_same_v<params, BN254_MOD_BASE>) {
+        uint254 p {gpu_barretenberg::R_SQUARED_BASE[0], gpu_barretenberg::R_SQUARED_BASE[1], gpu_barretenberg::R_SQUARED_BASE[2], gpu_barretenberg::R_SQUARED_BASE[3]};
+        mul(p, x, resf);
+    } else {
+        uint254 p {gpu_barretenberg::R_SQUARED_SCALAR[0], gpu_barretenberg::R_SQUARED_SCALAR[1], gpu_barretenberg::R_SQUARED_SCALAR[2], gpu_barretenberg::R_SQUARED_SCALAR[3]};
+        mul(p, x, resf);
+    }
+}
+
+template<class params>
+__device__ __forceinline__ void field_single<params>::from_monty(uint254 x, uint254 &resf) {
+    uint254 one{1, 0, 0, 0};
+    mul(one, x, resf);
 }

@@ -88,6 +88,7 @@ class pippenger_t {
 
         void calculate_windows(pippenger_t &config, size_t npoints);
 
+        // They can be replaced by thrust host vectors
         device_ptr<point_t> device_base_ptrs;
         device_ptr<scalar_t> device_scalar_ptrs;
         cudaStream_t *streams;

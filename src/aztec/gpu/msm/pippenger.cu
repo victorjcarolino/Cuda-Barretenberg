@@ -41,8 +41,7 @@ Context<point_t, scalar_t> *msm_t<P, S>::pippenger_initialize(g1::affine_element
         CUDA_WRAPPER(cudaMallocAsync(&j_points, 3 * NUM_POINTS * LIMBS * sizeof(uint64_t), context->pipp.streams[0]));
         CUDA_WRAPPER(cudaMallocAsync(&a_points, 2 * NUM_POINTS * LIMBS * sizeof(uint64_t), context->pipp.streams[0]));
         CUDA_WRAPPER(cudaMemcpyAsync(a_points, points, NUM_POINTS * LIMBS * 2 * sizeof(uint64_t), 
-                                    cudaMemcpyHostToDevice, context->pipp.streams[0]
-        ));
+                                    cudaMemcpyHostToDevice, context->pipp.streams[0]));
         affine_to_jacobian<<<(NUM_POINTS / 256), 256, 0, context->pipp.streams[0]>>>(a_points, j_points, NUM_POINTS);
         
         // Transfer bases and scalars to device

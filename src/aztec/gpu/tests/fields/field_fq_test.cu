@@ -34,10 +34,8 @@ __global__ void mont_mult(uint64_t *a, uint64_t *b, uint64_t *result) {
 /* -------------------------- Montgomery Multiplication Test -- Short Integers ---------------------------------------------- */
 
 __global__ void initialize_mont_mult_short(uint64_t *a, uint64_t *b, uint64_t *expected) {
-    // fq_gpu a_field{ 0xa, 0, 0, 0 };
-    // fq_gpu b_field{ 0xb, 0, 0, 0 };
-    fq_gpu a_field{ 0x1, 0, 0, 0 };
-    fq_gpu b_field{ 0x1, 0, 0, 0 };
+    fq_gpu a_field{ 0xa, 0, 0, 0 };
+    fq_gpu b_field{ 0xb, 0, 0, 0 };
     fq_gpu expect = { 0x65991a6dc2f3a183, 0xe3ba1f83394a2d08, 0x8401df65a169db3f, 0x1727099643607bba };
 
     for (int i = 0; i < LIMBS; i++) {

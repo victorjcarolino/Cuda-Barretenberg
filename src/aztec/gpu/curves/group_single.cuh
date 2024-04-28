@@ -1,6 +1,4 @@
-#include "field.cu"
 #include "field_single.cu"
-#include "element.cu"
 #include "element_single.cu"
 #include <cstdint>
 #include <stdio.h>
@@ -98,11 +96,11 @@ class group_gpu_single {
 
         /* -------------------------- Affine and Jacobian Coordinate Operations ---------------------------------------------- */
 
-         __device__ __forceinline__ void load_affine(affine_element_single &X, affine_element_single &result);
+         __device__ __forceinline__ void load_affine(affine_element &X, affine_element &result);
 
-        __device__ __forceinline__ static void load_jacobian(element_single &X, element_single &result);
+        __device__ __forceinline__ static void load_jacobian(element &X, element &result);
         
-        __device__ __forceinline__ static void add(uint254 X1, uint254 Y1, uint254 Z1, uint254 X2, uint254 Y2, var Z2, uint254 &res_x, uint254 &res_y, uint254 &res_z);
+        __device__ __forceinline__ static void add(uint254 X1, uint254 Y1, uint254 Z1, uint254 X2, uint254 Y2, uint254 Z2, uint254 &res_x, uint254 &res_y, uint254 &res_z);
 
         __device__ __forceinline__ static void mixed_add(uint254 X1, uint254 Y1, uint254 Z1, uint254 X2, uint254 Y2, uint254 &res_x, uint254 &res_y, uint254 &res_z);
 
@@ -110,11 +108,12 @@ class group_gpu_single {
 
         /* -------------------------- Projective Coordinate Operations ---------------------------------------------- */
         
-        __device__ __forceinline__ static void load_projective(projective_element_single &X, projective_element_single &result);
+        __device__ __forceinline__ static void load_projective(projective_element &X, projective_element &result);
         
-        projective_element_single from_affine(const affine_element_single &other);
+        projective_element from_affine(const affine_element &other);
         
-        __device__ __forceinline__ static void add_projective(single X1, single Y1, single Z1, single X2, single Y2, single Z2, single &res_x, single &res_y, single &res_z);
+        // fix parameters
+        __device__ __forceinline__ static void add_projective(uint254 X1, uint254 Y1, uint254 Z1, uint254 X2, uint254 Y2, uint254 Z2, uint254 &res_x, uint254 &res_y, uint254 &res_z);
 };
 typedef group_gpu_single<fq_single, fr_single> g1_single ;
 

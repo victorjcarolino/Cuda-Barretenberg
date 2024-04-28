@@ -1,9 +1,8 @@
-#include "element.cuh"
 #include "element_single.cuh"
 
 using namespace std;
-using namespace gpu_barretenberg;
-using namespace gpu_group_elements;
+// using namespace gpu_barretenberg;
+// using namespace gpu_group_elements;
 using namespace gpu_barretenberg_single;
 using namespace gpu_group_elements_single;
 

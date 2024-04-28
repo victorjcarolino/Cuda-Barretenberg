@@ -7,15 +7,13 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
 #include <type_traits>
-#include "field.cuh"
 #include "field_single.cuh"
 
-using namespace gpu_barretenberg;
 using namespace gpu_barretenberg_single;
 
 template<class params> 
 __device__ __forceinline__ field_single<params>::field_single(var a, var b, var c, var d) noexcept
-    : limbs{ a, b, c, d } {};
+    : data{ a, b, c, d } {};
 
 template<class params>
 __device__ __forceinline__ field_single<params> field_single<params>::zero() {
@@ -31,7 +29,7 @@ __device__ __forceinline__ uint254 field_single<params>::load(uint254 x, uint254
     return res;
 }
 
-// Not used in msm implementation
+// Tal: Not used in msm implementation
 /**
  * Store operation copies data from a register into main memory
  */
@@ -60,9 +58,9 @@ template<class params>
 __device__ __forceinline__ void field_single<params>::add(const uint254 a, const uint254 b, uint254 &res) {
     const var *p;
     if (std::is_same_v<params, BN254_MOD_BASE>) {
-        p = gpu_barretenberg::MOD_Q_BASE;
+        p = gpu_barretenberg_single::MOD_Q_BASE;
     } else {
-        p = gpu_barretenberg::MOD_Q_SCALAR;
+        p = gpu_barretenberg_single::MOD_Q_SCALAR;
     }
     asm(
         "add.cc.u64 %0, %4, %8;\n\t"
@@ -93,9 +91,9 @@ __device__ __forceinline__ void field_single<params>::sub(const uint254 a, const
     
     const var *p;
     if (std::is_same_v<params, BN254_MOD_BASE>) {
-        p = gpu_barretenberg::MOD_Q_BASE;
+        p = gpu_barretenberg_single::MOD_Q_BASE;
     } else {
-        p = gpu_barretenberg::MOD_Q_SCALAR;
+        p = gpu_barretenberg_single::MOD_Q_SCALAR;
     }
 
     asm(
@@ -133,9 +131,9 @@ __device__ __forceinline__ void field_single<params>::sub_inplace(uint254 &af, c
 
     const var *p;
     if (std::is_same_v<params, BN254_MOD_BASE>) {
-        p = gpu_barretenberg::MOD_Q_BASE;
+        p = gpu_barretenberg_single::MOD_Q_BASE;
     } else {
-        p = gpu_barretenberg::MOD_Q_SCALAR;
+        p = gpu_barretenberg_single::MOD_Q_SCALAR;
     }
 
     bool a_ge_b =
@@ -175,11 +173,11 @@ __device__ __forceinline__ void field_single<params>::mul(const uint254 af, cons
     var r_inv;
     const var *p;
     if (std::is_same_v<params, BN254_MOD_BASE>) {
-        r_inv = gpu_barretenberg::r_inv_base;
-        p = gpu_barretenberg::MOD_Q_BASE;
+        r_inv = gpu_barretenberg_single::r_inv_base;
+        p = gpu_barretenberg_single::MOD_Q_BASE;
     } else {
-        r_inv = gpu_barretenberg::r_inv_scalar;
-        p = gpu_barretenberg::MOD_Q_SCALAR;
+        r_inv = gpu_barretenberg_single::r_inv_scalar;
+        p = gpu_barretenberg_single::MOD_Q_SCALAR;
     }
 
     for (int i = 0; i < 4; i++) {
@@ -256,14 +254,12 @@ __device__ __forceinline__ void field_single<params>::square(const uint254 x, ui
 }
 
 template<class params>
-__device__ __forceinline__ void field_single<params>::neg(uint254 &resf) {
-    uint254 x{resf.limbs[0], resf.limbs[1], resf.limbs[2], resf.limbs[3]};
-
+__device__ __forceinline__ void field_single<params>::neg(uint254 x, uint254 &resf) {
     if (std::is_same_v<params, BN254_MOD_BASE>) {
-        uint254 p {gpu_barretenberg::MOD_Q_BASE[0], gpu_barretenberg::MOD_Q_BASE[1], gpu_barretenberg::MOD_Q_BASE[2], gpu_barretenberg::MOD_Q_BASE[3]};
+        uint254 p {gpu_barretenberg_single::MOD_Q_BASE[0], gpu_barretenberg_single::MOD_Q_BASE[1], gpu_barretenberg_single::MOD_Q_BASE[2], gpu_barretenberg_single::MOD_Q_BASE[3]};
         sub(p, x, resf);
     } else {
-        uint254 p {gpu_barretenberg::MOD_Q_SCALAR[0], gpu_barretenberg::MOD_Q_SCALAR[1], gpu_barretenberg::MOD_Q_SCALAR[2], gpu_barretenberg::MOD_Q_SCALAR[3]};
+        uint254 p {gpu_barretenberg_single::MOD_Q_SCALAR[0], gpu_barretenberg_single::MOD_Q_SCALAR[1], gpu_barretenberg_single::MOD_Q_SCALAR[2], gpu_barretenberg_single::MOD_Q_SCALAR[3]};
         sub(p, x, resf);
     }
 }
@@ -271,10 +267,10 @@ __device__ __forceinline__ void field_single<params>::neg(uint254 &resf) {
 template<class params>
 __device__ __forceinline__ void field_single<params>::to_monty(uint254 x, uint254 &resf) {
     if (std::is_same_v<params, BN254_MOD_BASE>) {
-        uint254 p {gpu_barretenberg::R_SQUARED_BASE[0], gpu_barretenberg::R_SQUARED_BASE[1], gpu_barretenberg::R_SQUARED_BASE[2], gpu_barretenberg::R_SQUARED_BASE[3]};
+        uint254 p {gpu_barretenberg_single::R_SQUARED_BASE[0], gpu_barretenberg_single::R_SQUARED_BASE[1], gpu_barretenberg_single::R_SQUARED_BASE[2], gpu_barretenberg_single::R_SQUARED_BASE[3]};
         mul(p, x, resf);
     } else {
-        uint254 p {gpu_barretenberg::R_SQUARED_SCALAR[0], gpu_barretenberg::R_SQUARED_SCALAR[1], gpu_barretenberg::R_SQUARED_SCALAR[2], gpu_barretenberg::R_SQUARED_SCALAR[3]};
+        uint254 p {gpu_barretenberg_single::R_SQUARED_SCALAR[0], gpu_barretenberg_single::R_SQUARED_SCALAR[1], gpu_barretenberg_single::R_SQUARED_SCALAR[2], gpu_barretenberg_single::R_SQUARED_SCALAR[3]};
         mul(p, x, resf);
     }
 }

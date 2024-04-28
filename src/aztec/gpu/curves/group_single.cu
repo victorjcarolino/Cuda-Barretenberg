@@ -1,26 +1,25 @@
-#include "group.cuh"
 #include "group_single.cuh"
 
 using namespace std;
-using namespace gpu_barretenberg;
+// using namespace gpu_barretenberg;
 using namespace gpu_barretenberg_single;
 
 /* -------------------------- Affine and Jacobian Coordinate Operations ---------------------------------------------- */
 
 template <class fq_single, class fr_single> 
-__device__ __forceinline__ void group_gpu<fq_gpu, fr_gpu>::load_affine(affine_element &X, affine_element &result) {
-    fq_single::load(X.x.limbs, result.x.limbs);        
+__device__ __forceinline__ void group_gpu_single<fq_single, fr_single>::load_affine(affine_element &X, affine_element &result) {
+    fq_single::load(X.x, result.x);        
         
-    fq_single::load(X.y.limbs, result.y.limbs);       
+    fq_single::load(X.y, result.y);       
 }
 
-template <class fq_gpu, class fr_gpu> 
-__device__ __forceinline__ void group_gpu<fq_gpu, fr_gpu>::load_jacobian(element &X, element &result) {
-    fq_gpu::load(X.x.limbs, result.x.limbs);          
+template <class fq_single, class fr_single> 
+__device__ __forceinline__ void group_gpu_single<fq_single, fr_single>::load_jacobian(element &X, element &result) {
+    fq_single::load(X.x, result.x);          
         
-    fq_gpu::load(X.y.limbs, result.y.limbs);      
+    fq_single::load(X.y, result.y);      
 
-    fq_gpu::load(X.z.limbs, result.z.limbs);      
+    fq_single::load(X.z, result.z);      
 }
 
 /**
@@ -29,12 +28,12 @@ __device__ __forceinline__ void group_gpu<fq_gpu, fr_gpu>::load_jacobian(element
 template <class fq_single, class fr_single> 
 __device__ __forceinline__ void group_gpu_single<fq_single, fr_single>::mixed_add(uint254 X, uint254 Y, uint254 Z, uint254 A, uint254 B, uint254 &res_x, uint254 &res_y, uint254 &res_z) {
     uint254 z1z1, u2, s2, h, hh, i, j, r, v, t0, t1;
-    
-    // X Element
+
+     // X Element
     fq_single::square(Z, z1z1);   
     fq_single::mul(A, z1z1, u2); 
     fq_single::mul(B, Z, s2);
-    fq_single::mul(s2, z1z1, s2); 
+    fq_single::mul(s2, z1z1, s2);
 
     fq_single::sub(u2, X, h);   
     fq_single::square(h, hh);    
@@ -65,9 +64,9 @@ __device__ __forceinline__ void group_gpu_single<fq_single, fr_single>::mixed_ad
 
 template <class fq_single, class fr_single> 
 __device__ __forceinline__ void group_gpu_single<fq_single, fr_single>::doubling(uint254 X, uint254 Y, uint254 Z, uint254 &res_x, uint254 &res_y, uint254 &res_z) {
-    uint245 T0, T1, T2, T3;
+    uint254 T0, T1, T2, T3;
 
-   // Check P == 0
+    // Check P == 0
     if (fq_single::is_zero(Z)) {
         fq_single::zero();
     }
@@ -158,22 +157,31 @@ __device__ __forceinline__ void group_gpu_single<fq_single, fr_single>::add(uint
     fq_single::sub(Z1, Z1Z1, Z1);           // Z1 = Z1 - Z1Z1
     fq_single::mul(Z1, H, Z1);              // Z1 = Z1 * H
     fq_single::load(Z1, res_z);             // res_z = Z1;
+
+    
+    // Tommy: include the Point1 == Point2 check inside the add() function
+    if (fq_single::is_zero(res_x) && fq_single::is_zero(res_y) && fq_single::is_zero(res_z)) {
+        g1_single::doubling(
+            X1, Y1, Z1, 
+            res_x, res_y, res_z
+        );
+    }
 }
 
 /* -------------------------- Projective Coordinate Operations ---------------------------------------------- */
 
 template <class fq_single, class fr_single> 
-__device__ __forceinline__ void group_gpu_single<fq_single, fr_single>::load_projective(projective_element_single &X, projective_element_single &result) {
-    fq_gpu::load(X.x.limbs, result.x.limbs);       
+__device__ __forceinline__ void group_gpu_single<fq_single, fr_single>::load_projective(projective_element &X, projective_element &result) {
+    fq_single::load(X.x, result.x);       
         
-    fq_gpu::load(X.x.limbs, result.y.limbs);      
+    fq_single::load(X.x, result.y);      
 
-    fq_gpu::load(X.z.limbs, result.z.limbs);      
+    fq_single::load(X.z, result.z);      
 }
 
 template <class fq_single, class fr_single> 
-projective_element_single<fq_single, fr_single> group_gpu<fq_gpu, fr_gpu>::from_affine(const affine_element_single &other) {
-    projective_element_single projective;
+projective_element_single<fq_single, fr_single> group_gpu_single<fq_single, fr_single>::from_affine(const affine_element &other) {
+    projective_element projective;
     projective.x = other.x;
     projective.y = other.y;
     return { projective.x, projective.y, fq_single::one() };
@@ -209,7 +217,7 @@ uint254 X1, uint254 Y1, uint254 Z1, uint254 X2, uint254 Y2, uint254 Z2, uint254 
     fq_single::add(t01, t02, X3);                                      // X3 ← t01 + t02
     fq_single::sub(t05, X3, t05);                                      // t05 ← t05 - X3
     fq_single::mul(0, t04, Z3);                                        // Z3 ← a * t04
-    fq_single::mul({3 * gpu_barretenberg::b, 3 * gpu_barretenberg::b,3 * gpu_barretenberg::b,3 * gpu_barretenberg::b,3 * gpu_barretenberg::b}, t02, X3);                  // X3 ← b3 * t02 
+    fq_single::mul({3 * gpu_barretenberg_single::b, 3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b}, t02, X3);                  // X3 ← b3 * t02 
     fq_single::add(X3, Z3, Z3);                                        // Z3 ← X3 + Z3
     fq_single::sub(t01, Z3, X3);                                       // X3 ← t01 - Z3
     fq_single::add(t01, Z3, Z3);                                       // Z3 ← t01 + Z3
@@ -217,7 +225,7 @@ uint254 X1, uint254 Y1, uint254 Z1, uint254 X2, uint254 Y2, uint254 Z2, uint254 
     fq_single::add(t00, t00, t01);                                     // t01 ← t00 + t00
     fq_single::add(t01, t00, t01);                                     // t01 ← t01 + t00
     fq_single::mul(0, t02, t02);                                       // t02 ← a * t02
-    fq_single::mul({3 * gpu_barretenberg::b, 3 * gpu_barretenberg::b,3 * gpu_barretenberg::b,3 * gpu_barretenberg::b,3 * gpu_barretenberg::b}, t04, t04);                 // t04 ← b3 * t04 
+    fq_single::mul({3 * gpu_barretenberg_single::b, 3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b}, t04, t04);                 // t04 ← b3 * t04 
     fq_single::add(t01, t02, t01);                                     // t01 ← t01 + t02
     fq_single::sub(t00, t02, t02);                                     // t02 ← t00 - t02
     fq_single::mul(0, t02, t02);                                       // t02 ← a * t02

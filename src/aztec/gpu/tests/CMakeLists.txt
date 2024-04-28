@@ -29,6 +29,10 @@ add_executable(
     curves/curve_jacobian_test.cu
 )
 add_executable(
+    curve_bn254_test_single
+    curves/curve_jacobian_test_single.cu
+)
+add_executable(
     curve_bn254_test_2
     curves/curve_projective_test.cu
 )

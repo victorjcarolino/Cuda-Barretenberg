@@ -3,7 +3,7 @@
 
 using namespace std;
 using namespace std::chrono;
-using namespace gpu_barretenberg;
+using namespace gpu_barretenberg_single;
 
 static constexpr int LIMBS_NUM = 4; // converted from size_t to eliminate warnings
 static constexpr size_t BLOCKS = 1;
@@ -209,7 +209,7 @@ __global__ void cube(uint254 &a, uint254 &expected, uint254 &result) {
     fq_single::mul(x_cubed, a, result);
     x_cubed = result;
     
-    fq_single::mul(a, gpu_barretenberg::CUBE_ROOT_BASE, expected);
+    fq_single::mul(a, gpu_barretenberg_single::CUBE_ROOT_BASE, expected);
     beta_x = expected;
     fq_single::mul(beta_x, beta_x, expected);
     beta_x_cubed = expected;

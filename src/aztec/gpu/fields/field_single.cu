@@ -11,10 +11,50 @@
 #include "field_single.cuh"
 
 using namespace gpu_barretenberg;
+using namespace gpu_barretenberg_single;
 
-// template<class params> 
-// __device__ __forceinline__ field_gpu<params>::field_gpu(std::uint a, var b, var c, var d) noexcept
-//     : limbs{ a, b, c, d } {};
+template<class params> 
+__device__ __forceinline__ field_single<params>::field_single(var a, var b, var c, var d) noexcept
+    : limbs{ a, b, c, d } {};
+
+template<class params>
+__device__ __forceinline__ field_single<params> field_single<params>::zero() {
+    return field_single(0x0, 0x0, 0x0, 0x0); 
+}
+
+/**
+ * Load operation copies data from main memory into a register
+ */
+template<class params> 
+__device__ __forceinline__ uint254 field_single<params>::load(uint254 x, uint254 &res) {
+    res = x;
+    return res;
+}
+
+// Not used in msm implementation
+/**
+ * Store operation copies data from a register into main memory
+ */
+template<class params> 
+__device__ __forceinline__ void field_single<params>::store(uint254 *mem, const uint254 &x) {
+    *mem = x;
+}
+
+// Montgomery form of 1
+template<class params>
+__device__ __forceinline__ field_single<params> field_single<params>::one() {
+    return field_single(0xd35d438dc58f0d9d, 0xa78eb28f5c70b3d, 0x666ea36f7879462c, 0xe0a77c19a07df2f); 
+}
+
+template<class params>
+__device__ __forceinline__ bool field_single<params>::is_zero(const uint254 &x) {
+    return (x.limbs[0] == 0) && (x.limbs[1] == 0) && (x.limbs[2] == 0) && (x.limbs[3] == 0); 
+}
+
+template<class params>
+__device__ __forceinline__ bool field_single<params>::equal(const uint254 x, const uint254 y) {
+    return (x.limbs[0] == y.limbs[0]) && (x.limbs[1] == y.limbs[1]) && (x.limbs[2] == y.limbs[2]) && (x.limbs[3] == y.limbs[3]); 
+}
 
 template<class params>
 __device__ __forceinline__ void field_single<params>::add(const uint254 a, const uint254 b, uint254 &res) {

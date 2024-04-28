@@ -38,60 +38,6 @@ __device__ __forceinline__ void group_gpu<fq_gpu, fr_gpu>::load_jacobian(element
 
 /* -------------------------- Thrust Affine and Jacobian Coordinate Operations ---------------------------------------------- */
 
-// template <class fq_gpu, class fr_gpu>
-// struct load_affine_functor {
-//     __host__ __device__
-//     element operator()(const element& X) {
-//         element result;
-//         fq_gpu::load(X.x.data[0], result.x.data[0]);
-//         fq_gpu::load(X.x.data[1], result.x.data[1]);
-//         fq_gpu::load(X.x.data[2], result.x.data[2]);
-//         fq_gpu::load(X.x.data[3], result.x.data[3]);
-
-//         fq_gpu::load(X.y.data[0], result.y.data[0]);
-//         fq_gpu::load(X.y.data[1], result.y.data[1]);
-//         fq_gpu::load(X.y.data[2], result.y.data[2]);
-//         fq_gpu::load(X.y.data[3], result.y.data[3]);
-
-//         return result;
-//     }
-// };
-
-// template <class fq_gpu, class fr_gpu>
-// void group_gpu<fq_gpu, fr_gpu>::load_affine(const thrust::device_vector<element>& X, thrust::device_vector<element>& result) {
-//     thrust::transform(X.begin(), X.end(), result.begin(), load_affine_functor<fq_gpu, fr_gpu>());
-// }
-
-// template <class fq_gpu, class fr_gpu>
-// struct load_jacobian_functor {
-//     __host__ __device__
-//     element operator()(const element& X) {
-//         element result;
-//         fq_gpu::load(X.x.data[0], result.x.data[0]);
-//         fq_gpu::load(X.x.data[1], result.x.data[1]);
-//         fq_gpu::load(X.x.data[2], result.x.data[2]);
-//         fq_gpu::load(X.x.data[3], result.x.data[3]);
-
-//         fq_gpu::load(X.y.data[0], result.y.data[0]);
-//         fq_gpu::load(X.y.data[1], result.y.data[1]);
-//         fq_gpu::load(X.y.data[2], result.y.data[2]);
-//         fq_gpu::load(X.y.data[3], result.y.data[3]);
-
-//         fq_gpu::load(X.z.data[0], result.z.data[0]);
-//         fq_gpu::load(X.z.data[1], result.z.data[1]);
-//         fq_gpu::load(X.z.data[2], result.z.data[2]);
-//         fq_gpu::load(X.z.data[3], result.z.data[3]);
-
-//         return result;
-//     }
-// };
-
-// template <class fq_gpu, class fr_gpu>
-// void group_gpu<fq_gpu, fr_gpu>::load_jacobian(const thrust::device_vector<element>& X, thrust::device_vector<element>& result) {
-//     thrust::transform(X.begin(), X.end(), result.begin(), load_jacobian_functor<fq_gpu, fr_gpu>());
-// }
-
-
 /**
  * Elliptic curve algorithms: https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#addition-zadd-2007-m
  */

@@ -9,6 +9,8 @@ include_directories(../bignum)
 add_library(curve_library STATIC 
     ./group.cu
     ./element.cu
+    ./group_single.cu
+    ./element_single.cu
 )
 
 target_link_libraries(

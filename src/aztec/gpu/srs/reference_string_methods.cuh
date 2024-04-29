@@ -1,4 +1,5 @@
 #include "group.cu"
+#include "group_single.cu"
 #include <cstdint>
 #include <string>
 

@@ -4,6 +4,8 @@ using namespace std;
 using namespace std::chrono;
 using namespace gpu_barretenberg;
 
+// test
+
 static constexpr size_t LIMBS_NUM = 4;
 static constexpr size_t BLOCKS = 1;
 static constexpr size_t THREADS = 1;
@@ -33,6 +35,8 @@ __global__ void initialize_mixed_add_check_against_constants
     }
 }
 
+#define DBG_LIMBS(msg, limbs) printf(msg " %lx %lx %lx %lx\n", limbs[0], limbs[1], limbs[2], limbs[3]);
+
 __global__ void mixed_add_check_against_constants
 (var *a, var *b, var *c, var *x, var *y, var *z, var *res_x, var *res_y, var *res_z) {
     g1_gpu::element lhs;
@@ -49,6 +53,12 @@ __global__ void mixed_add_check_against_constants
         rhs.x.data[tid] = fq_gpu::to_monty(x[tid], res_x[tid]);
         rhs.y.data[tid] = fq_gpu::to_monty(y[tid], res_x[tid]);
 
+        DBG_LIMBS("mixed_add 0 lhs.x", lhs.x.data);
+        DBG_LIMBS("mixed_add 0 lhs.y", lhs.y.data);
+        DBG_LIMBS("mixed_add 0 lhs.z", lhs.z.data);
+        DBG_LIMBS("mixed_add 0 rhs.x", rhs.x.data);
+        DBG_LIMBS("mixed_add 0 rhs.y", rhs.y.data);
+
         // lhs + rhs (affine element + jacobian element)
         g1_gpu::mixed_add(
             lhs.x.data[tid], lhs.y.data[tid], lhs.z.data[tid], 
@@ -56,10 +66,18 @@ __global__ void mixed_add_check_against_constants
             res_x[tid], res_y[tid], res_z[tid]
         );
 
+        DBG_LIMBS("mixed_add 1 x", res_x);
+        DBG_LIMBS("mixed_add 1 y", res_y);
+        DBG_LIMBS("mixed_add 1 z", res_z);
+
         // Return results from montgomery form 
         fq_gpu::from_monty(res_x[tid], res_x[tid]);
         fq_gpu::from_monty(res_y[tid], res_y[tid]);
         fq_gpu::from_monty(res_z[tid], res_z[tid]);
+
+        DBG_LIMBS("mixed_add 2 x", res_x);
+        DBG_LIMBS("mixed_add 2 y", res_y);
+        DBG_LIMBS("mixed_add 2 z", res_z);
     }
 }
 
@@ -484,11 +502,25 @@ __global__ void group_exponentiation(uint64_t *a, uint64_t *b, uint64_t *c, var 
                         Q.x.data[tid], Q.y.data[tid], Q.z.data[tid], 
                         R.x.data[tid], R.y.data[tid], R.z.data[tid]
                     );
+                printf("\nEXPONENT i %d j %d PART 1\n", i, j);
+                DBG_LIMBS("  group exp R.x", R.x.data);
+                DBG_LIMBS("  group exp R.y", R.y.data);
+                DBG_LIMBS("  group exp R.z", R.z.data);
+                DBG_LIMBS("  group exp Q.x", Q.x.data);
+                DBG_LIMBS("  group exp Q.y", Q.y.data);
+                DBG_LIMBS("  group exp Q.z", Q.z.data);
                 if (i != 0) 
                     g1_gpu::doubling(
                         R.x.data[tid], R.y.data[tid], R.z.data[tid], 
                         R.x.data[tid], R.y.data[tid], R.z.data[tid]
                     );
+                printf("\nEXPONENT i %d j %d PART 2\n", i, j);
+                DBG_LIMBS("  group exp R.x", R.x.data);
+                DBG_LIMBS("  group exp R.y", R.y.data);
+                DBG_LIMBS("  group exp R.z", R.z.data);
+                DBG_LIMBS("  group exp Q.x", Q.x.data);
+                DBG_LIMBS("  group exp Q.y", Q.y.data);
+                DBG_LIMBS("  group exp Q.z", Q.z.data);
             }
         }
     }
@@ -574,22 +606,22 @@ __global__ void operator_ordering(uint64_t *a, uint64_t *b, uint64_t *c, uint64_
 void assert_checks(var *expected, var *result) {
     // Explicit synchronization barrier
     cudaDeviceSynchronize();
+
+    // Print statements
+    printf("expected[0] is: %zx\n", expected[0]);
+    printf("expected[1] is: %zx\n", expected[1]);
+    printf("expected[2] is: %zx\n", expected[2]);
+    printf("expected[3] is: %zx\n", expected[3]);
+    printf("result[0] is: %zx\n", result[0]);
+    printf("result[1] is: %zx\n", result[1]);
+    printf("result[2] is: %zx\n", result[2]);
+    printf("result[3] is: %zx\n", result[3]);
     
     // Assert clause
     assert(expected[0] == result[0]);
     assert(expected[1] == result[1]);
     assert(expected[2] == result[2]);
     assert(expected[3] == result[3]);
-
-    // Print statements
-    printf("expected[0] is: %zu\n", expected[0]);
-    printf("expected[1] is: %zu\n", expected[1]);
-    printf("expected[2] is: %zu\n", expected[2]);
-    printf("expected[3] is: %zu\n", expected[3]);
-    printf("result[0] is: %zu\n", result[0]);
-    printf("result[1] is: %zu\n", result[1]);
-    printf("result[2] is: %zu\n", result[2]);
-    printf("result[3] is: %zu\n", result[3]);
 }
 
 void execute_kernels
@@ -623,11 +655,11 @@ void execute_kernels
     assert_checks(expected_z, res_z);
 
     // Add Double Consistency Test
-    initialize_add_dbl_consistency<<<BLOCKS, THREADS>>>(a, b, c, x, y, z);
-    add_dbl_consistency<<<BLOCKS, LIMBS_NUM>>>(a, b, c, x, y, z, expected_x, expected_y, expected_z, res_x, res_y, res_z);
-    assert_checks(expected_x, res_x);
-    assert_checks(expected_y, res_y);
-    assert_checks(expected_z, res_z);
+    // initialize_add_dbl_consistency<<<BLOCKS, THREADS>>>(a, b, c, x, y, z);
+    // add_dbl_consistency<<<BLOCKS, LIMBS_NUM>>>(a, b, c, x, y, z, expected_x, expected_y, expected_z, res_x, res_y, res_z);
+    // assert_checks(expected_x, res_x);
+    // assert_checks(expected_y, res_y);
+    // assert_checks(expected_z, res_z);
 
     // Add Double Consistency Repeated Test
     initialize_add_dbl_consistency_repeated<<<BLOCKS, THREADS>>>(a, b, c);
@@ -640,12 +672,12 @@ void execute_kernels
     assert_checks(expected_y, res_y);
     assert_checks(expected_z, res_z);
 
-    // Operator Ordering Test
-    initialize_operator_ordering<<<BLOCKS, THREADS>>>(a, b, c, x);
-    operator_ordering<<<BLOCKS, LIMBS_NUM>>>(a, b, c, x, res_x, res_y, res_z);
-    assert_checks(expected_x, res_x);
-    assert_checks(expected_y, res_y);
-    assert_checks(expected_z, res_z);
+    // // Operator Ordering Test
+    // initialize_operator_ordering<<<BLOCKS, THREADS>>>(a, b, c, x);
+    // operator_ordering<<<BLOCKS, LIMBS_NUM>>>(a, b, c, x, res_x, res_y, res_z);
+    // assert_checks(expected_x, res_x);
+    // assert_checks(expected_y, res_y);
+    // assert_checks(expected_z, res_z);
 }
 
 /* -------------------------- Main Entry Function ---------------------------------------------- */

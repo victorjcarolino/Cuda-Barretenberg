@@ -212,7 +212,7 @@ __device__ __forceinline__ void field_single<params>::mul(const uint254 af, cons
             "madc.hi.cc.u64 %1, %10, %12, %1;\n\t"  // T[1] += {m*p[1]}.hi + cf
             "madc.hi.cc.u64 %2, %10, %13, %2;\n\t"  // T[2] += {m*p[2]}.hi + cf
             "madc.hi.cc.u64 %3, %10, %14, %3;\n\t"  // T[3] += {m*p[3]}.hi + cf
-            "addc.u64 %4, %4, 0;\n\t"               // T[4] += cf
+            "addc.u64 %4, %4, 0;"                   // T[4] += cf
             : "=l"(T[0]), "=l"(T[1]), "=l"(T[2]), "=l"(T[3]), "=l"(T[4])
               // 5
             : "l"(T[0]), "l"(T[1]), "l"(T[2]), "l"(T[3]), "l"(T[4])

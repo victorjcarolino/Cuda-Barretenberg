@@ -15,12 +15,11 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
 
     // Bucket initialization kernel
     point_t *buckets;
-    unsigned NUM_THREADS = 1 << 10; // # threads used for initializing buckets & splitting scalars
+    unsigned NUM_THREADS = 1 << 10; 
 
     unsigned NUM_BLOCKS = (config.num_buckets + NUM_THREADS - 1) / NUM_THREADS;
-    // config.num_buckets is (buckets per window * #windows), each point has 3 coordinates, the size of a coordinate is (4 * sizeof(uint64_t)), 
-    CUDA_WRAPPER(cudaMallocAsync(&buckets, config.num_buckets * 3 * (4 * sizeof(uint64_t)), stream));
-    initialize_buckets_kernel<<<NUM_BLOCKS * 4, NUM_THREADS, 0, stream>>>(buckets);    // TODO remove the *4
+    CUDA_WRAPPER(cudaMallocAsync(&buckets, config.num_buckets * 3 * 4 * sizeof(uint64_t), stream));
+    initialize_buckets_kernel<<<NUM_BLOCKS * 4, NUM_THREADS, 0, stream>>>(buckets); 
 
     // Scalars decomposition kernel
     CUDA_WRAPPER(cudaMallocAsync(&(params->bucket_indices), sizeof(unsigned) * npoints * (windows + 1), stream));
@@ -29,12 +28,11 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
         (params->bucket_indices + npoints, params->point_indices + npoints, scalars, npoints, windows, c);
 
     // Execute CUB routines for determining bucket sizes, offsets, etc. 
-        // sort points, 
     execute_cub_routines(config, config.params, stream);
 
     // Bucket accumulation kernel
     unsigned NUM_THREADS_2 = 1 << 8;
-    unsigned NUM_BLOCKS_2 = ((config.num_buckets + NUM_THREADS_2 - 1) / NUM_THREADS_2) * 4; // TODO remove the *4
+    unsigned NUM_BLOCKS_2 = ((config.num_buckets + NUM_THREADS_2 - 1) / NUM_THREADS_2) * 4;
     accumulate_buckets_kernel<<<NUM_BLOCKS_2, NUM_THREADS_2, 0, stream>>>
         (buckets, params->bucket_offsets, params->bucket_sizes, params->single_bucket_indices, 
         params->point_indices, points, config.num_buckets);
@@ -47,7 +45,10 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
     // Final accumulation kernel
     point_t *res;
     CUDA_WRAPPER(cudaMallocManaged(&res, 3 * 4 * sizeof(uint64_t)));
-    final_accumulation_kernel<<<1, 4, 0, stream>>>(final_sum, res, windows, c);
+    typedef gpu_barretenberg_single::gpu_group_elements_single::element_single<gpu_barretenberg_single::fq_single, gpu_barretenberg_single::fr_single> point_single_t;
+    point_single_t *final_sum_single = reinterpret_cast<point_single_t *>(final_sum);
+    point_single_t *res_single = reinterpret_cast<point_single_t *>(res);
+    final_accumulation_kernel<<<1, 1, 0, stream>>>(final_sum_single, res_single, windows, c);
     
     // Synchronize stream
     cudaStreamSynchronize(stream);
@@ -82,7 +83,6 @@ template <class point_t, class scalar_t>
 void pippenger_t<point_t, scalar_t>::execute_cub_routines(pippenger_t &config, cub_routines *params, cudaStream_t stream) {
     // Radix sort algorithm
     size_t sort_indices_temp_storage_bytes; 
-    // TJP - how is the value of npoints found?
     cub::DeviceRadixSort::SortPairs(params->sort_indices_temp_storage, sort_indices_temp_storage_bytes, params->bucket_indices 
                                     + npoints, params->bucket_indices, params->point_indices + npoints, params->point_indices, 
                                     npoints, 0, sizeof(unsigned) * 8, stream);
@@ -99,8 +99,6 @@ void pippenger_t<point_t, scalar_t>::execute_cub_routines(pippenger_t &config, c
     CUDA_WRAPPER(cudaMallocAsync(&(params->single_bucket_indices), sizeof(unsigned) * config.num_buckets, stream));
 
     // TODO: THIS ALLOCATION NEEDS TO BE CHANGED AND WILL VARY RUNTIME OF PIPPENGER FOR SOME REASON
-    /** Tal: (sizeof(unsigned) * config.num_buckets * config.num_buckets) is definitely not the right memory size, and it should instead 
-    be (sizeof(unsigned) * config.num_buckets) or (sizeof(unsigned) * config.num_buckets + 1) .**/
     CUDA_WRAPPER(cudaMallocAsync(&(params->bucket_sizes), sizeof(unsigned) * config.num_buckets * config.num_buckets, stream));
     CUDA_WRAPPER(cudaMallocAsync(&(params->nof_buckets_to_compute), sizeof(unsigned), stream));
     size_t encode_temp_storage_bytes = 0;

@@ -1,3 +1,6 @@
+#ifndef FIELD_COMMON_CUH
+#define FIELD_COMMON_CUH
+
 namespace gpu_barretenberg_common {
 
 typedef std::uint64_t var;
@@ -173,3 +176,5 @@ struct BN254_MOD_SCALAR {
 };
 
 }
+
+#endif /* FIELD_COMMON_CUH */

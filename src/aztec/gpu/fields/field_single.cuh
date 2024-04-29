@@ -48,6 +48,12 @@ struct uint254 {
     uint254(const uint64_t x) : limbs{x, x, x, x} {}
 };
 
+__host__ __device__
+inline bool operator==(const uint254& lhs, const uint254& rhs) {
+    return lhs.limbs[0] == rhs.limbs[0] && lhs.limbs[1] == rhs.limbs[1] && lhs.limbs[2] == rhs.limbs[2] && lhs.limbs[3] == rhs.limbs[3];
+}
+__host__ __device__
+inline bool operator!=(const uint254& lhs, const uint254& rhs) { return !(lhs == rhs); }
 
 // /* -------------------------- Finite Field Arithmetic for G1 ---------------------------------------------- */
 

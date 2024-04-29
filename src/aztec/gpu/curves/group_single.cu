@@ -217,7 +217,7 @@ uint254 X1, uint254 Y1, uint254 Z1, uint254 X2, uint254 Y2, uint254 Z2, uint254 
     fq_single::add(t01, t02, X3);                                      // X3 ← t01 + t02
     fq_single::sub(t05, X3, t05);                                      // t05 ← t05 - X3
     fq_single::mul(0, t04, Z3);                                        // Z3 ← a * t04
-    fq_single::mul({3 * gpu_barretenberg_single::b, 3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b}, t02, X3);                  // X3 ← b3 * t02 
+    fq_single::mul(3 * gpu_barretenberg_single::b, t02, X3);           // X3 ← b3 * t02 
     fq_single::add(X3, Z3, Z3);                                        // Z3 ← X3 + Z3
     fq_single::sub(t01, Z3, X3);                                       // X3 ← t01 - Z3
     fq_single::add(t01, Z3, Z3);                                       // Z3 ← t01 + Z3
@@ -225,7 +225,7 @@ uint254 X1, uint254 Y1, uint254 Z1, uint254 X2, uint254 Y2, uint254 Z2, uint254 
     fq_single::add(t00, t00, t01);                                     // t01 ← t00 + t00
     fq_single::add(t01, t00, t01);                                     // t01 ← t01 + t00
     fq_single::mul(0, t02, t02);                                       // t02 ← a * t02
-    fq_single::mul({3 * gpu_barretenberg_single::b, 3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b,3 * gpu_barretenberg_single::b}, t04, t04);                 // t04 ← b3 * t04 
+    fq_single::mul(3 * gpu_barretenberg_single::b, t04, t04);          // t04 ← b3 * t04 
     fq_single::add(t01, t02, t01);                                     // t01 ← t01 + t02
     fq_single::sub(t00, t02, t02);                                     // t02 ← t00 - t02
     fq_single::mul(0, t02, t02);                                       // t02 ← a * t02

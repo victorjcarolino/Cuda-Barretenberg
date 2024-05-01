@@ -22,16 +22,17 @@ int main(int argc, char *argv[]) {
     //     usage();
     //     return 1;
     // }
-    if (argc != 3) {
-        usage();
-        return 1;
-    }
+    // if (argc != 3) {
+    //     usage();
+    //     return 1;
+    // }
     long long n = atoll(argv[1]);
     if (n == 0 || n > SIZE_MAX) {
         usage();
         return 1;
     }
-    long long acc_buck_threads = atoll(argv[2]);
+    // long long acc_buck_threads = atoll(argv[2]);
+    long long acc_buck_threads = 7;
     NUM_POINTS = n;
 
     // Initialize dynamic 'msm_t' object 

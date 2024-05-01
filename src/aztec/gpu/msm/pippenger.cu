@@ -104,8 +104,8 @@ Context<point_t, scalar_t> *context, g1::affine_element *points, fr *scalars, in
     }
     cout << "finished pippenger!" << endl;
 
-    duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-    std::cout << "Pippenger executed in " << time_span.count() << " seconds." << endl;
+    // duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+    // std::cout << "Pippenger executed in " << time_span.count() << " seconds." << endl;
 
     return result;
 }

@@ -13,7 +13,7 @@ namespace pippenger_common {
 /**
  * Naive multiplication kernel
  */
-__global__ void multiplication_kernel(g1_gpu::element *point, fr_gpu *scalar, g1_gpu::element *result_vec, size_t npoints) { 
+__global__ void multiplication_kernel(thrust::device_vector<g1_gpu::element> point, thrust::device_vector<fr_gpu> scalar, thrust::device_vector<g1_gpu::element> result_vec, size_t npoints) { 
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     
     // Parameters for coperative groups
@@ -31,6 +31,8 @@ __global__ void multiplication_kernel(g1_gpu::element *point, fr_gpu *scalar, g1
     fq_gpu::mul(point[(subgroup + (subgroup_size * blockIdx.x))].z.data[tid % 4], 
                 scalar[(subgroup + (subgroup_size * blockIdx.x))].data[tid % 4], 
                 result_vec[(subgroup + (subgroup_size * blockIdx.x))].z.data[tid % 4]);
+
+    
 }
 
 /**

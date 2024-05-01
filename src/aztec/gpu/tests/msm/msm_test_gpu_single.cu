@@ -445,12 +445,11 @@ __global__ void naive_double_and_add_field_vector_simple(fq_single *point, fq_si
 
 /**
  * Naive double and add using multiple kernel invocations with block-level grandularity
- called in 'execute_kernels_finite_fields_vector'
  */ 
 __global__ void naive_double_and_add_field_vector(fq_single *point, fq_single *result_vec, uint254 &result) { 
     // TODO - convert this add() for thrust implementation
     fq_single::add(
-        point[blockIdx.x * 2].data, point[(blockIdx.x * 2) + 1].data, result_vec[blockIdx.x].data
+        point[blockIdx.x * 2].data[threadIdx.x], point[(blockIdx.x * 2) + 1].data[threadIdx.x], result_vec[blockIdx.x].data[threadIdx.x]
     );
 
     __syncthreads();
@@ -512,14 +511,13 @@ __global__ void naive_double_and_add_curve_vector_simple(g1_single::element *poi
 
 /**
  * Naive double and add using multiple kernel invocations with block-level grandularity
- called in 'execute_kernels_curve_vector'
  */ 
 __global__ void naive_double_and_add_curve_vector(g1_single::element *point, g1_single::element *result_vec, uint254 &res_x, uint254 &res_y,  uint254 &res_z) {     
     // TODO - convert this add() for thrust implementation
     g1_single::add(
-        point[blockIdx.x * 2].x.data, point[blockIdx.x * 2].y.data, point[blockIdx.x * 2].z.data,
-        point[(blockIdx.x * 2) + 1].x.data, point[(blockIdx.x * 2) + 1].y.data, point[(blockIdx.x * 2) + 1].z.data,
-        result_vec[blockIdx.x].x.data, result_vec[blockIdx.x].y.data, result_vec[blockIdx.x].z.data
+        point[blockIdx.x * 2].x.data[threadIdx.x], point[blockIdx.x * 2].y.data[threadIdx.x], point[blockIdx.x * 2].z.data[threadIdx.x],
+        point[(blockIdx.x * 2) + 1].x.data[threadIdx.x], point[(blockIdx.x * 2) + 1].y.data[threadIdx.x], point[(blockIdx.x * 2) + 1].z.data[threadIdx.x],
+        result_vec[blockIdx.x].x.data[threadIdx.x], result_vec[blockIdx.x].y.data[threadIdx.x], result_vec[blockIdx.x].z.data[threadIdx.x]
     );
 }
 
@@ -594,12 +592,14 @@ __global__ void double_and_add_field_vector_with_scalars(fq_single *point, fr_si
  * Naive double and add of vector of curve elements and scalars using sequential implementation
  */
 __global__ void naive_double_and_add_curve_with_scalars(
-g1_single::element *point, fr_single *scalar, g1_single::element &result_vec, uint254 &res_x, uint254 &res_y,uint254 &res_z) { 
+g1_single::element *point, fr_single *scalar, g1_single::element *result_vec, uint64_t *res_x, uint64_t *res_y, uint64_t *res_z) { 
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
     g1_single::element temp;
     g1_single::element temp_accumulator;
-    fq_single res_x_temp(uint254{ 0, 0, 0, 0 });
-    fq_single res_y_temp(uint254{ 0, 0, 0, 0 });
-    fq_single res_z_temp(uint254{ 0, 0, 0, 0 });
+    fq_single res_x_temp{ 0, 0, 0, 0 };
+    fq_single res_y_temp{ 0, 0, 0, 0 };
+    fq_single res_z_temp{ 0, 0, 0, 0 };
 
     fq_single::load(res_x_temp.data, temp.x.data);
     fq_single::load(res_y_temp.data, temp.y.data);
@@ -616,19 +616,14 @@ g1_single::element *point, fr_single *scalar, g1_single::element &result_vec, ui
         fq_single::add(temp.y.data, temp_accumulator.y.data, temp_accumulator.y.data);
         fq_single::add(temp.z.data, temp_accumulator.z.data, temp_accumulator.z.data);
     }
+    
+    fq_single::load(temp_accumulator.x.data, result_vec[0].x.data);
+    fq_single::load(temp_accumulator.y.data, result_vec[0].y.data);
+    fq_single::load(temp_accumulator.z.data, result_vec[0].z.data);
 
-    // Tommy - simplifying these 3 load() and 3 to_monty() calls into 3 to_monty() calls
-    // fq_single::load(temp_accumulator.x.data, result_vec[0].x.data);
-    // fq_single::load(temp_accumulator.y.data, result_vec[0].y.data);
-    // fq_single::load(temp_accumulator.z.data, result_vec[0].z.data);
-
-    // fq_single::from_monty(result_vec[0].x.data, result_vec[0].x.data);
-    // fq_single::from_monty(result_vec[0].y.data, result_vec[0].y.data);
-    // fq_single::from_monty(result_vec[0].z.data, result_vec[0].z.data);  
-
-    fq_single::from_monty(temp_accumulator.x.data, result_vec[0].x.data);
-    fq_single::from_monty(temp_accumulator.y.data, result_vec[0].y.data);
-    fq_single::from_monty(temp_accumulator.z.data, result_vec[0].z.data);    
+    fq_single::from_monty(result_vec[0].x.data, result_vec[0].x.data);
+    fq_single::from_monty(result_vec[0].y.data, result_vec[0].y.data);
+    fq_single::from_monty(result_vec[0].z.data, result_vec[0].z.data);   
 
     fq_single::load(result_vec[0].x.data, res_x);
     fq_single::load(result_vec[0].y.data, res_y);
@@ -648,7 +643,7 @@ B* read_field_points() {
     if ( myfile.is_open() ) {     
         for (size_t i = 0; i < POINTS * 4; ++i) {
             for (size_t j = 0; j < 4; j++) {
-                myfile >> points[i].data.limbs[j];
+                myfile >> points[i].data[j];
             }
         }
     }
@@ -660,19 +655,19 @@ B* read_field_points() {
  */ 
 template <class B>
 B* read_curve_points() {
-    g1_single::element *points = new g1_single::element[POINTS * sizeof(g1_single::element)];
+    g1_single::element *points = new g1_single::element[3 * LIMBS * POINTS * sizeof(var)];
     std::ifstream myfile ("../src/aztec/gpu/benchmark/tests/msm/points/curve_points.txt"); 
 
     if ( myfile.is_open() ) {   
         for (size_t i = 0; i < POINTS; i++) {
             for (size_t j = 0; j < 4; j++) {
-                myfile >> points[i].x.data.limbs[j];
+                myfile >> points[i].x.data[j];
             }
             for (size_t y = 0; y < 4; y++) {
-                myfile >> points[i].y.data.limbs[y];
+                myfile >> points[i].y.data[y];
             }
             for (size_t z = 0; z < 4; z++) {
-                myfile >> points[i].z.data.limbs[z];
+                myfile >> points[i].z.data[z];
             }
         }   
     }
@@ -689,14 +684,13 @@ B* read_scalars() {
 
     // File stream
     ifstream stream;
-    // stream.open("../src/aztec/gpu/msm/points/scalars.txt", ios::in);
-    stream.open("../src/aztec/gpu/benchmark/tests/msm/points/scalars.txt", ios::in);
+    stream.open("../src/aztec/gpu/msm/points/scalars.txt", ios::in);
 
     // Read scalars
     if ( stream.is_open() ) {   
         for (size_t i = 0; i < POINTS; i++) {
             for (size_t j = 0; j < 4; j++) {
-                stream >> scalars[i].data.[j];
+                stream >> scalars[i].data[j];
             }
         }   
     }
@@ -708,7 +702,7 @@ B* read_scalars() {
 /**
  * Compare two elliptic curve elements
  */ 
-__global__ void comparator_kernel(g1_single::element *point, g1_single::element *point_2, uint64 &result) {     
+__global__ void comparator_kernel(g1_single::element *point, g1_single::element *point_2, uint64_t *result) {     
     fq_single lhs_zz;
     fq_single lhs_zzz;
     fq_single rhs_zz;
@@ -717,62 +711,56 @@ __global__ void comparator_kernel(g1_single::element *point, g1_single::element 
     fq_single lhs_y;
     fq_single rhs_x;
     fq_single rhs_y;
+
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
     
-    fq_single::square(point[0].z.data, lhs_zz.data);
-    fq_single::mul(lhs_zz.data, point[0].z.data, lhs_zzz.data);
-    fq_single::square(point_2[0].z.data, rhs_zz.data);
-    fq_single::mul(rhs_zz.data, point_2[0].z.data, rhs_zzz.data);
-    fq_single::mul(point[0].x.data, rhs_zz.data, lhs_x.data);
-    fq_single::mul(point[0].y.data, rhs_zzz.data, lhs_y.data);
-    fq_single::mul(point_2[0].x.data, lhs_zz.data, rhs_x.data);
-    fq_single::mul(point_2[0].y.data, lhs_zzz.data, rhs_y.data);
+    lhs_zz.data =  fq_single::square(point[0].z.data, lhs_zz.data);
+    lhs_zzz.data = fq_single::mul(lhs_zz.data, point[0].z.data, lhs_zzz.data);
+    rhs_zz.data = fq_single::square(point_2[0].z.data, rhs_zz.data);
+    rhs_zzz.data = fq_single::mul(rhs_zz.data, point_2[0].z.data, rhs_zzz.data);
+    lhs_x.data = fq_single::mul(point[0].x.data, rhs_zz.data, lhs_x.data);
+    lhs_y.data = fq_single::mul(point[0].y.data, rhs_zzz.data, lhs_y.data);
+    rhs_x.data = fq_single::mul(point_2[0].x.data, lhs_zz.data, rhs_x.data);
+    rhs_y.data = fq_single::mul(point_2[0].y.data, lhs_zzz.data, rhs_y.data);
     result = ((lhs_x.data == rhs_x.data) && (lhs_y.data == rhs_y.data));
 }
 
 /**
  * Print results
  */ 
-void print_field_tests(uint254 &result) {
+void print_field_tests(var *result) {
     // Explicit synchronization barrier
     cudaDeviceSynchronize();
 
     // Print results for each limb
-    printf("result[0] is: %zu\n", result.limbs[0]);
-    printf("result[1] is: %zu\n", result.limbs[1]);
-    printf("result[2] is: %zu\n", result.limbs[2]);
-    printf("result[3] is: %zu\n\n", result.limbs[3]);
+    printf("result[0] is: %zu\n", result[0]);
+    printf("result[1] is: %zu\n", result[1]);
+    printf("result[2] is: %zu\n", result[2]);
+    printf("result[3] is: %zu\n\n", result[3]);
 }
 
-/**
-* Print results. Use this instead of print_field_tests for result variable representing a boolean
-*/
-void print_result_bool(uint64 result_bool) {
-    cudaDeviceSynchronize(); // Shouldn't need to synchronize, but keeping as precaution
-    printf("result is: %zu\n", result_bool);
-}
-
-void print_curve_tests(uint254 *res_x, uint254 *res_y, uint254 *res_z) {
+void print_curve_tests(var *res_x, var *res_y, var *res_z) {
     // Explicit synchronization barrier
     cudaDeviceSynchronize();
 
     // Print results for each limb
-    printf("res_x[0] is: %zu\n", res_x->limbs[0]);
-    printf("res_x[1] is: %zu\n", res_x->limbs[1]);
-    printf("res_x[2] is: %zu\n", res_x->limbs[2]);
-    printf("res_x[3] is: %zu\n\n", res_x->limbs[3]);
+    printf("res_x[0] is: %zu\n", res_x[0]);
+    printf("res_x[1] is: %zu\n", res_x[1]);
+    printf("res_x[2] is: %zu\n", res_x[2]);
+    printf("res_x[3] is: %zu\n\n", res_x[3]);
 
-    printf("res_y[0] is: %zu\n", res_y->limbs[0]);
-    printf("res_y[1] is: %zu\n", res_y->limbs[1]);
-    printf("res_y[2] is: %zu\n", res_y->limbs[2]);
-    printf("res_y[3] is: %zu\n\n", res_y->limbs[3]);
+    printf("res_y[0] is: %zu\n", res_y[0]);
+    printf("res_y[1] is: %zu\n", res_y[1]);
+    printf("res_y[2] is: %zu\n", res_y[2]);
+    printf("res_y[3] is: %zu\n\n", res_y[3]);
 
-    printf("res_z[0] is: %zu\n", res_z->limbs[0]);
-    printf("res_z[1] is: %zu\n", res_z->limbs[1]);
-    printf("res_z[2] is: %zu\n", res_z->limbs[2]);
-    printf("res_z[3] is: %zu\n\n", res_z->limbs[3]);
+    printf("res_z[0] is: %zu\n", res_z[0]);
+    printf("res_z[1] is: %zu\n", res_z[1]);
+    printf("res_z[2] is: %zu\n", res_z[2]);
+    printf("res_z[3] is: %zu\n\n", res_z[3]);
 }
 
-void print_field_vector_tests(fq_single &result_vec) {
+void print_field_vector_tests(fq_single *result_vec) {
     // Explicit synchronization barrier
     cudaDeviceSynchronize();
 
@@ -784,54 +772,54 @@ void print_field_vector_tests(fq_single &result_vec) {
 }
 
 // Assert statements
-void assert_checks(uint254 *expected, uint254 *result) {
+void assert_checks(var *expected, var *result) {
     // Explicit synchronization barrier
     cudaDeviceSynchronize();
 
     // Assert clause
-    assert(expected->limbs[0] == result->limbs[0]);
-    assert(expected->limbs[1] == result->limbs[1]);
-    assert(expected->limbs[2] == result->limbs[2]);
-    assert(expected->limbs[3] == result->limbs[3]);
+    assert(expected[0] == result[0]);
+    assert(expected[1] == result[1]);
+    assert(expected[2] == result[2]);
+    assert(expected[3] == result[3]);
 }
 
 /* -------------------------- Executing Initialization and Workload Kernels ---------------------------------------------- */
 
 // Execute kernel with finite field elements
 void execute_kernels_finite_fields(
-uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x, uint254 *res_y, uint254 *res_z, uint254 *expect_x,  uint254 *expect_y,  uint254 *expect_z) {    
-    initialize_simple_double_and_add_field<<<1, 1>>>(*a, *b, *expect_x);
+var *a, var *b, var *c, var *d, var *result, var *res_x, var *res_y, var *res_z, var *expect_x,  var *expect_y,  var *expect_z) {    
+    initialize_simple_double_and_add_field<<<BLOCKS, THREADS>>>(a, b, expect_x);
     
-    double_and_add_field<<<1, 1>>>(*a, *b, *result);
+    double_and_add_field<<<BLOCKS, THREADS>>>(a, b, result);
     assert_checks(expect_x, result);
-    print_field_tests(*result);
+    print_field_tests(result);
 
-    simple_multiplication_field<<<1, 1>>>(*a, *b, *result);
+    simple_multiplication_field<<<BLOCKS, THREADS>>>(a, b, result);
     assert_checks(expect_x, result);
-    print_field_tests(*result);
+    print_field_tests(result);
 
-    naive_double_and_add_field<<<1, 1>>>(*a, *b, *result);
+    naive_double_and_add_field<<<BLOCKS, THREADS>>>(a, b, result);
     assert_checks(expect_x, result);
-    print_field_tests(*result);
+    print_field_tests(result);
     
-    double_and_add_half_field<<<1, 1>>>(*a, *b, *result);
+    double_and_add_half_field<<<BLOCKS, THREADS>>>(a, b, result);
     assert_checks(expect_x, result);
-    print_field_tests(*result);
+    print_field_tests(result);
 }
 
 // Execute kernel with curve elements
 void execute_kernels_curve(
-uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x, uint254 *res_y, uint254 *res_z, uint254 *expect_x, uint254 *expect_y, uint254 *expect_z) {    
-    naive_double_and_add_curve<<<1, 1>>>(*a, *b, *c, *d, *res_x, *res_y, *res_z);
+var *a, var *b, var *c, var *d, var *result, var *res_x, var *res_y, var *res_z, var *expect_x, var *expect_y, var *expect_z) {    
+    naive_double_and_add_curve<<<BLOCKS, THREADS>>>(a, b, c, d, res_x, res_y, res_z);
     print_curve_tests(res_x, res_y, res_z);
 
-    double_and_add_half_curve<<<1, 1>>>(*a, *b, *c, *d, *res_x, *res_y, *res_z);
+    double_and_add_half_curve<<<BLOCKS, THREADS>>>(a, b, c, d, res_x, res_y, res_z);
     assert_checks(expect_x, res_x);
     assert_checks(expect_y, res_y);
     assert_checks(expect_z, res_z);
     print_curve_tests(res_x, res_y, res_z);
 
-    double_and_add_curve<<<1, 1>>>(*a, *b, *c, *d, *res_x, *res_y, *res_z);
+    double_and_add_curve<<<BLOCKS, THREADS>>>(a, b, c, d, res_x, res_y, res_z);
     assert_checks(expect_x, res_x);
     assert_checks(expect_y, res_y);
     assert_checks(expect_z, res_z);
@@ -840,7 +828,7 @@ uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x,
 
 // Execute kernel with vector of finite field elements
 void execute_kernels_finite_fields_vector(
-uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x, uint254 *res_y, uint254 *res_z, uint254 *expect_x, uint254 *expect_y, uint254 *expect_z) {    
+var *a, var *b, var *c, var *d, var *result, var *res_x, var *res_y, var *res_z, var *expect_x, var *expect_y, var *expect_z) {    
     // Read curve points
     fq_single *points = read_field_points<fq_single>();
 
@@ -848,13 +836,13 @@ uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x,
     fq_single *points_alloc, *result_vec;
 
     // Allocate unified memory accessible by host and device
-    cudaMallocManaged(&points_alloc, POINTS * sizeof(fq_single));
-    cudaMallocManaged(&result_vec, POINTS * sizeof(fq_single));
+    cudaMallocManaged(&points_alloc, LIMBS * POINTS * sizeof(var));
+    cudaMallocManaged(&result_vec, LIMBS * POINTS * sizeof(var));
 
     // Load points
     for (int i = 0; i < POINTS; i++) {
         for (int j = 0; j < LIMBS; j++) {
-            points_alloc[i].data.limbs[j] = points[i].data.limbs[j];
+            points_alloc[i].data[j] = points[i].data[j];
         }
     }
 
@@ -865,30 +853,29 @@ uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x,
     expect_x[3] = 0x21E559B660EDBD92;
 
     // Kernel invocation 1
-    // Tommy - this kernel changed from 4 threads
-    naive_double_and_add_field_vector_simple<<<1, 1>>>(points_alloc, result_vec, *result); 
+    naive_double_and_add_field_vector_simple<<<1, 4>>>(points_alloc, result_vec, result);
     assert_checks(expect_x, result);
     print_field_tests(result);
 
     // Kernel invocation 2
-    naive_double_and_add_field_vector<<<1024, 1>>>(points_alloc, result_vec, *result);
-    naive_double_and_add_field_vector<<<512, 1>>>(result_vec, result_vec, *result);
-    naive_double_and_add_field_vector<<<256, 1>>>(result_vec, result_vec, *result);
-    naive_double_and_add_field_vector<<<128, 1>>>(result_vec, result_vec, *result);
-    naive_double_and_add_field_vector<<<64, 1>>>(result_vec, result_vec, *result);
-    naive_double_and_add_field_vector<<<32, 1>>>(result_vec, result_vec, *result);
-    naive_double_and_add_field_vector<<<16, 1>>>(result_vec, result_vec, *result);
-    naive_double_and_add_field_vector<<<8, 1>>>(result_vec, result_vec, *result);
-    naive_double_and_add_field_vector<<<4, 1>>>(result_vec, result_vec, *result);
-    naive_double_and_add_field_vector<<<2, 1>>>(result_vec, result_vec, *result);
-    naive_double_and_add_field_vector<<<1, 1>>>(result_vec, result_vec, *result);
-    convert_field<<<1, 1>>>(result_vec, result);
+    naive_double_and_add_field_vector<<<1024, 4>>>(points_alloc, result_vec, result);
+    naive_double_and_add_field_vector<<<512, 4>>>(result_vec, result_vec, result);
+    naive_double_and_add_field_vector<<<256, 4>>>(result_vec, result_vec, result);
+    naive_double_and_add_field_vector<<<128, 4>>>(result_vec, result_vec, result);
+    naive_double_and_add_field_vector<<<64, 4>>>(result_vec, result_vec, result);
+    naive_double_and_add_field_vector<<<32, 4>>>(result_vec, result_vec, result);
+    naive_double_and_add_field_vector<<<16, 4>>>(result_vec, result_vec, result);
+    naive_double_and_add_field_vector<<<8, 4>>>(result_vec, result_vec, result);
+    naive_double_and_add_field_vector<<<4, 4>>>(result_vec, result_vec, result);
+    naive_double_and_add_field_vector<<<2, 4>>>(result_vec, result_vec, result);
+    naive_double_and_add_field_vector<<<1, 4>>>(result_vec, result_vec, result);
+    convert_field<<<1, 4>>>(result_vec, result);
     print_field_tests(result);
 }
 
 // Execute kernel with vector of finite field elements
 void execute_kernels_curve_vector(
-uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x, uint254 *res_y, uint254 *res_z, uint254 *expect_x, uint254 *expect_y, uint254 *expect_z) {    
+var *a, var *b, var *c, var *d, var *result, var *res_x, var *res_y, var *res_z, var *expect_x, var *expect_y, var *expect_z) {    
     // Read curve points
     g1_single::element *points = read_curve_points<g1_single::element>();
 
@@ -896,16 +883,16 @@ uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x,
     g1_single::element *points_alloc, *result_vec_1, *result_vec_2;
 
     // Allocate unified memory accessible by host and device
-    cudaMallocManaged(&points_alloc, POINTS * sizeof(g1_single::element));
-    cudaMallocManaged(&result_vec_1, POINTS * sizeof(g1_single::element));
-    cudaMallocManaged(&result_vec_2, POINTS * sizeof(g1_single::element));
+    cudaMallocManaged(&points_alloc, 3 * LIMBS * POINTS * sizeof(var));
+    cudaMallocManaged(&result_vec_1, 3 * LIMBS * POINTS * sizeof(var));
+    cudaMallocManaged(&result_vec_2, 3 * LIMBS * POINTS * sizeof(var));
  
     // Load curve elements 
     for (int i = 0; i < POINTS; i++) {
         for (int j = 0; j < LIMBS; j++) {
-            points_alloc[i].x.data.limbs[j] = points[i].x.data.limbs[j];
-            points_alloc[i].y.data.limbs[j] = points[i].y.data.limbs[j];
-            points_alloc[i].z.data.limbs[j] = points[i].z.data.limbs[j];
+            points_alloc[i].x.data[j] = points[i].x.data[j];
+            points_alloc[i].y.data[j] = points[i].y.data[j];
+            points_alloc[i].z.data[j] = points[i].z.data[j];
         }
     }
 
@@ -926,40 +913,35 @@ uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x,
     expect_z[3] = 0x14E512C471B5CDD4;
 
     // Kernel invocation 1
-    naive_double_and_add_curve_vector_simple<<<1, 1>>>(points_alloc, result_vec_1, *res_x, *res_y, *res_z);
+    naive_double_and_add_curve_vector_simple<<<1, 4>>>(points_alloc, result_vec_1, res_x, res_y, res_z);
     assert_checks(expect_x, res_x);
     assert_checks(expect_y, res_y);
     assert_checks(expect_z, res_z);
     print_curve_tests(res_x, res_y, res_z);
 
     // Kernel invocation 2
-    naive_double_and_add_curve_vector<<<512, 1>>>(points_alloc, result_vec_2, *res_x, *res_y, *res_z);
-    naive_double_and_add_curve_vector<<<256, 1>>>(result_vec_2, result_vec_2, *res_x, *res_y, *res_z);
-    naive_double_and_add_curve_vector<<<128, 1>>>(result_vec_2, result_vec_2, *res_x, *res_y, *res_z);
-    naive_double_and_add_curve_vector<<<64, 1>>>(result_vec_2, result_vec_2, *res_x, *res_y, *res_z);
-    naive_double_and_add_curve_vector<<<32, 1>>>(result_vec_2, result_vec_2, *res_x, *res_y, *res_z);
-    naive_double_and_add_curve_vector<<<16, 1>>>(result_vec_2, result_vec_2, *res_x, *res_y, *res_z);
-    naive_double_and_add_curve_vector<<<8, 1>>>(result_vec_2, result_vec_2, *res_x, *res_y, *res_z);
-    naive_double_and_add_curve_vector<<<4, 1>>>(result_vec_2, result_vec_2, *res_x, *res_y, *res_z);
-    naive_double_and_add_curve_vector<<<2, 1>>>(result_vec_2, result_vec_2, *res_x, *res_y, *res_z);
-    naive_double_and_add_curve_vector<<<1, 1>>>(result_vec_2, result_vec_2, *res_x, *res_y, *res_z);
-    convert_curve<<<1, 1>>>(result_vec_2, *res_x, *res_y, *res_z);
+    naive_double_and_add_curve_vector<<<512, 4>>>(points_alloc, result_vec_2, res_x, res_y, res_z);
+    naive_double_and_add_curve_vector<<<256, 4>>>(result_vec_2, result_vec_2, res_x, res_y, res_z);
+    naive_double_and_add_curve_vector<<<128, 4>>>(result_vec_2, result_vec_2, res_x, res_y, res_z);
+    naive_double_and_add_curve_vector<<<64, 4>>>(result_vec_2, result_vec_2, res_x, res_y, res_z);
+    naive_double_and_add_curve_vector<<<32, 4>>>(result_vec_2, result_vec_2, res_x, res_y, res_z);
+    naive_double_and_add_curve_vector<<<16, 4>>>(result_vec_2, result_vec_2, res_x, res_y, res_z);
+    naive_double_and_add_curve_vector<<<8, 4>>>(result_vec_2, result_vec_2, res_x, res_y, res_z);
+    naive_double_and_add_curve_vector<<<4, 4>>>(result_vec_2, result_vec_2, res_x, res_y, res_z);
+    naive_double_and_add_curve_vector<<<2, 4>>>(result_vec_2, result_vec_2, res_x, res_y, res_z);
+    naive_double_and_add_curve_vector<<<1, 4>>>(result_vec_2, result_vec_2, res_x, res_y, res_z);
+    convert_curve<<<1, 4>>>(result_vec_2, res_x, res_y, res_z);
     print_curve_tests(res_x, res_y, res_z);
 
-    // // Compare results
-    // cudaDeviceSynchronize();
-    // comparator_kernel<<<1, 1>>>(result_vec_1, result_vec_2, result);
-    // print_field_tests(result);
+    // Compare results
     cudaDeviceSynchronize();
-    uint64 result_bool;
-    comparator_kernel<<<1, 1>>>(result_vec_1, result_vec_2, result_bool);
-    *result = uint254{result_bool, 0, 0, 0};
-    print_result_bool(result_bool);
+    comparator_kernel<<<1, 4>>>(result_vec_1, result_vec_2, result);
+    print_field_tests(result);
 }
 
 // Execute kernel with vector of finite field elements with scalars
 void execute_kernels_finite_fields_vector_with_scalars(
-uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x, uint254 *res_y, uint254 *res_z, uint254 *expect_x, uint254 *expect_y, uint254 *expect_z) {    
+var *a, var *b, var *c, var *d, var *result, var *res_x, var *res_y, var *res_z, var *expect_x, var *expect_y, var *expect_z) {    
     // Read curve points and scalars
     fr_single *scalars = read_scalars<fr_single>();
     fq_single *points = read_field_points<fq_single>();
@@ -969,22 +951,22 @@ uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x,
     fr_single *scalars_alloc;
 
     // Allocate unified memory accessible by host and device
-    cudaMallocManaged(&points_alloc, POINTS * sizeof(fq_single));
-    cudaMallocManaged(&scalars_alloc, POINTS * sizeof(fr_single));
-    cudaMallocManaged(&result_vec_1, POINTS * sizeof(fq_single));
-    cudaMallocManaged(&result_vec_2, POINTS * sizeof(fq_single));
+    cudaMallocManaged(&points_alloc, LIMBS * POINTS * sizeof(var));
+    cudaMallocManaged(&scalars_alloc, LIMBS * POINTS * sizeof(var));
+    cudaMallocManaged(&result_vec_1, LIMBS * POINTS * sizeof(var));
+    cudaMallocManaged(&result_vec_2, LIMBS * POINTS * sizeof(var));
 
     // Load field elements 
     for (int i = 0; i < POINTS; i++) {
         for (int j = 0; j < LIMBS; j++) {
-            points_alloc[i].data.limbs[j] = points[i].data.limbs[j];
+            points_alloc[i].data[j] = points[i].data[j];
         }
     }
 
     // Load scalars
     for (int i = 0; i < POINTS; i++) {
         for (int j = 0; j < LIMBS; j++) {
-            scalars_alloc[i].data.limbs[j] = scalars[i].data.limbs[j];
+            scalars_alloc[i].data[j] = scalars[i].data[j];
         }
     }
 
@@ -995,19 +977,17 @@ uint254 *a, uint254 *b, uint254 *c, uint254 *d, uint254 *result, uint254 *res_x,
     expect_x[3] = 0x93075569BFD611A;
 
     // Kernel invocation 1
-    // Tommy - this kernel changed from 4 threads
-    naive_double_and_add_field_vector_with_scalars<<<1, 1>>>(points_alloc, scalars_alloc, result_vec_1, *result);
+    naive_double_and_add_field_vector_with_scalars<<<1, 4>>>(points_alloc, scalars_alloc, result_vec_1, result);
     assert_checks(expect_x, result);
     print_field_tests(result);
 
-    // Tommy - this kernel changed from (THREADS = 4) threads
-    double_and_add_field_vector_with_scalars<<<BLOCKS, 1>>>(points_alloc, scalars_alloc, *result);
+    double_and_add_field_vector_with_scalars<<<BLOCKS, THREADS>>>(points_alloc, scalars_alloc, result);
     print_field_tests(result);
 }
 
 // Execute kernel with vector of curve elements with scalars
 void execute_kernels_curve_vector_with_scalars(
-uint254 *a, uint254 *b, uin254 *c, uint254 *d, uint254 *result, uint254 *res_x, uint254 *res_y, uint254 *res_z, uint254 *expect_x, uint254 *expect_y, uint254 *expect_z) {    
+var *a, var *b, var *c, var *d, var *result, var *res_x, var *res_y, var *res_z, var *expect_x, var *expect_y, var *expect_z) {    
     // Read curve points and scalars
     fr_single *scalars = read_scalars<fr_single>();
     g1_single::element *points = read_curve_points<g1_single::element>();
@@ -1020,23 +1000,23 @@ uint254 *a, uint254 *b, uin254 *c, uint254 *d, uint254 *result, uint254 *res_x, 
     fr_single *scalars_alloc;
 
     // Allocate unified memory accessible by host and device
-    cudaMallocManaged(&points_alloc, POINTS * sizeof(g1_single::element));
-    cudaMallocManaged(&scalars_alloc, POINTS * sizeof(fr_single));
-    cudaMallocManaged(&result_vec, POINTS * sizeof(g1_single::element));
+    cudaMallocManaged(&points_alloc, 3 * LIMBS * POINTS * sizeof(var));
+    cudaMallocManaged(&scalars_alloc, LIMBS * POINTS * sizeof(var));
+    cudaMallocManaged(&result_vec, 3 * LIMBS * POINTS * sizeof(var));
 
     // Load curve elements 
     for (int i = 0; i < POINTS; i++) {
         for (int j = 0; j < LIMBS; j++) {
-            points_alloc[i].x.data.limbs[j] = points[i].x.data.limbs[j];
-            points_alloc[i].y.data.limbs[j] = points[i].y.data.limbs[j];
-            points_alloc[i].z.data.limbs[j] = points[i].z.data.limbs[j];
+            points_alloc[i].x.data[j] = points[i].x.data[j];
+            points_alloc[i].y.data[j] = points[i].y.data[j];
+            points_alloc[i].z.data[j] = points[i].z.data[j];
         }
     }
 
     // Load scalars
     for (int i = 0; i < POINTS; i++) {
         for (int j = 0; j < LIMBS; j++) {
-            scalars_alloc[i].data.limbs[j] = scalars[i].data.limbs[j];
+            scalars_alloc[i].data[j] = scalars[i].data[j];
         }
     }
 
@@ -1057,7 +1037,7 @@ uint254 *a, uint254 *b, uin254 *c, uint254 *d, uint254 *result, uint254 *res_x, 
     expect_z[3] = 0x293E5E8A3728B7C6;
 
     // Kernel invocation 1
-    naive_double_and_add_curve_with_scalars<<<1, 1>>>(points_alloc, scalars_alloc, result_vec, *res_x, *res_y, *res_z);
+    naive_double_and_add_curve_with_scalars<<<1, 4>>>(points_alloc, scalars_alloc, result_vec, res_x, res_y, res_z);
     assert_checks(expect_x, res_x);
     assert_checks(expect_y, res_y);
     assert_checks(expect_z, res_z);
@@ -1068,167 +1048,130 @@ uint254 *a, uint254 *b, uin254 *c, uint254 *d, uint254 *result, uint254 *res_x, 
 
 // Execute kernel with curve elements
 void execute_double_and_add_single(
-uint254 *a, uint254 *b, uin254 *c, uint254 *d, uint254 *result, uint254 *res_x, uint254 *res_y, uint254 *res_z, uint254 *expect_x, uint254 *expect_y, uint254 *expect_z) {
-    initialize_simple_double_and_add_curve_single<<<1, 1>>>(*a, *b, *c, *d, *expect_x, *expect_y, *expect_z);
+var *a, var *b, var *c, var *d, var *result, var *res_x, var *res_y, var *res_z, var *expect_x, var *expect_y, var *expect_z) {    
+    initialize_simple_double_and_add_curve_single<<<BLOCKS, THREADS>>>(a, b, c, d, expect_x, expect_y, expect_z);
 
-    naive_multiplication_single<<<1, 1>>>(*a, *b, *c, *d, *res_x, *res_y, *res_z);
+    naive_multiplication_single<<<BLOCKS, THREADS>>>(a, b, c, d, res_x, res_y, res_z);
     cudaDeviceSynchronize();
     print_curve_tests(res_x, res_y, res_z);
 
     g1_single::element *final_res;
     g1_single::element *expected_1;
     g1_single::element *expected_2;
-    uint254 *result_1;
-    uint254 *result_2;
-    cudaMallocManaged(&final_res, 1 * sizeof(g1_single::element));
-    cudaMallocManaged(&expected_1, 1 * sizeof(g1_single::element));
-    cudaMallocManaged(&expected_2, 1 * sizeof(g1_single::element));
-    cudaMallocManaged(&result_1, 1 * sizeof(uint254));
-    cudaMallocManaged(&result_2, 1 * sizeof(uint254));
+    var *result_1;
+    var *result_2;
+    cudaMallocManaged(&final_res, 3 * LIMBS * 1 * sizeof(var));
+    cudaMallocManaged(&expected_1, 3 * LIMBS * 1 * sizeof(var));
+    cudaMallocManaged(&expected_2, 3 * LIMBS * 1 * sizeof(var));
+    cudaMallocManaged(&result_1, LIMBS * 1 * sizeof(var));
+    cudaMallocManaged(&result_2, LIMBS * 1 * sizeof(var));
 
     // Convert final result
-    // final_res[0].x.data[0] = res_x[0];
-    // final_res[0].x.data[1] = res_x[1];
-    // final_res[0].x.data[2] = res_x[2];
-    // final_res[0].x.data[3] = res_x[3];
-    // final_res[0].y.data[0] = res_y[0];
-    // final_res[0].y.data[1] = res_y[1];
-    // final_res[0].y.data[2] = res_y[2];
-    // final_res[0].y.data[3] = res_y[3];
-    // final_res[0].z.data[0] = res_z[0];
-    // final_res[0].z.data[1] = res_z[1];
-    // final_res[0].z.data[2] = res_z[2];
-    // final_res[0].z.data[3] = res_z[3];
-    final_res[0].x.data.limbs = *res_x;
-    final_res[0].y.data.limbs = *res_y;
-    final_res[0].z.data.limbs = *res_z;
+    final_res[0].x.data[0] = res_x[0];
+    final_res[0].x.data[1] = res_x[1];
+    final_res[0].x.data[2] = res_x[2];
+    final_res[0].x.data[3] = res_x[3];
+    final_res[0].y.data[0] = res_y[0];
+    final_res[0].y.data[1] = res_y[1];
+    final_res[0].y.data[2] = res_y[2];
+    final_res[0].y.data[3] = res_y[3];
+    final_res[0].z.data[0] = res_z[0];
+    final_res[0].z.data[1] = res_z[1];
+    final_res[0].z.data[2] = res_z[2];
+    final_res[0].z.data[3] = res_z[3];
 
     // Expected results from naive double-and-add kernel from Barretenberg
-    // expected_1[0].x.data[0] = 0x9C9320BC891ED9DE;
-    // expected_1[0].x.data[1] = 0xACE55F06AA29C3F2;
-    // expected_1[0].x.data[2] = 0x24DB84E75A391315;
-    // expected_1[0].x.data[3] = 0x595DBA53EFD6FD5B;
-    // expected_1[0].y.data[0] = 0x9ECB0640B15EC4D0;
-    // expected_1[0].y.data[1] = 0x7B9C653CA35FA1AE;
-    // expected_1[0].y.data[2] = 0x5B387CDD03D7F5EA;
-    // expected_1[0].y.data[3] = 0x4FCFDCA5887EEB8E;
-    // expected_1[0].z.data[0] = 0xA35A8F1E4C0E6A4F;
-    // expected_1[0].z.data[1] = 0x6715FFC8177D607C;
-    // expected_1[0].z.data[2] = 0x71EFC8CAC5C4F073;
-    // expected_1[0].z.data[3] = 0x2BFA6FF080354472;
-    expected_1[0].x.data.limbs = uint254{0x9C9320BC891ED9DE, 0xACE55F06AA29C3F2, 0x24DB84E75A391315, 0x595DBA53EFD6FD5B};
-    expected_1[0].y.data.limbs = uint254{0x9ECB0640B15EC4D0, 0x7B9C653CA35FA1AE, 0x5B387CDD03D7F5EA, 0x4FCFDCA5887EEB8E};
-    expected_1[0].z.data.limbs = uint254{0xA35A8F1E4C0E6A4F, 0x6715FFC8177D607C, 0x71EFC8CAC5C4F073, 0x2BFA6FF080354472};
-
+    expected_1[0].x.data[0] = 0x9C9320BC891ED9DE;
+    expected_1[0].x.data[1] = 0xACE55F06AA29C3F2;
+    expected_1[0].x.data[2] = 0x24DB84E75A391315;
+    expected_1[0].x.data[3] = 0x595DBA53EFD6FD5B;
+    expected_1[0].y.data[0] = 0x9ECB0640B15EC4D0;
+    expected_1[0].y.data[1] = 0x7B9C653CA35FA1AE;
+    expected_1[0].y.data[2] = 0x5B387CDD03D7F5EA;
+    expected_1[0].y.data[3] = 0x4FCFDCA5887EEB8E;
+    expected_1[0].z.data[0] = 0xA35A8F1E4C0E6A4F;
+    expected_1[0].z.data[1] = 0x6715FFC8177D607C;
+    expected_1[0].z.data[2] = 0x71EFC8CAC5C4F073;
+    expected_1[0].z.data[3] = 0x2BFA6FF080354472;
 
     // Expected results from custom MSM kernel
-    // expected_2[0].x.data[0] = 0xE62BB32C93AA0F8A;
-    // expected_2[0].x.data[1] = 0x97CEA47D1C9918D8;
-    // expected_2[0].x.data[2] = 0x6E4F6B103D5CB238;
-    // expected_2[0].x.data[3] = 0xCC97B85B5D3266B;
-    // expected_2[0].y.data[0] = 0x384B9977174D6D23;
-    // expected_2[0].y.data[1] = 0x9EB9C140BF105B1;
-    // expected_2[0].y.data[2] = 0xEF83689C8B6B86AB;
-    // expected_2[0].y.data[3] = 0x1DEE77175CFD916E;
-    // expected_2[0].z.data[0] = 0x51EC9058273498D3;
-    // expected_2[0].z.data[1] = 0x54FA2618A1043D98;
-    // expected_2[0].z.data[2] = 0x86005E4D5FEBEB41;
-    // expected_2[0].z.data[3] = 0x171CBD46E7C215D3;
-    expected_2[0].x.data.limbs = uint254{0xE62BB32C93AA0F8A, 0x97CEA47D1C9918D8, 0x6E4F6B103D5CB238, 0xCC97B85B5D3266B};
-    expected_2[0].y.data.limbs = uint254{0x384B9977174D6D23, 0x9EB9C140BF105B1, 0xEF83689C8B6B86AB, 0x1DEE77175CFD916E};
-    expected_2[0].z.data.limbs = uint254{0x51EC9058273498D3, 0x54FA2618A1043D98, 0x86005E4D5FEBEB41, 0x171CBD46E7C215D3};
+    expected_2[0].x.data[0] = 0xE62BB32C93AA0F8A;
+    expected_2[0].x.data[1] = 0x97CEA47D1C9918D8;
+    expected_2[0].x.data[2] = 0x6E4F6B103D5CB238;
+    expected_2[0].x.data[3] = 0xCC97B85B5D3266B;
+    expected_2[0].y.data[0] = 0x384B9977174D6D23;
+    expected_2[0].y.data[1] = 0x9EB9C140BF105B1;
+    expected_2[0].y.data[2] = 0xEF83689C8B6B86AB;
+    expected_2[0].y.data[3] = 0x1DEE77175CFD916E;
+    expected_2[0].z.data[0] = 0x51EC9058273498D3;
+    expected_2[0].z.data[1] = 0x54FA2618A1043D98;
+    expected_2[0].z.data[2] = 0x86005E4D5FEBEB41;
+    expected_2[0].z.data[3] = 0x171CBD46E7C215D3;
 
-    // comparator_kernel<<<1, 4>>>(final_res, expected_1, result_1);
-    // comparator_kernel<<<1, 4>>>(final_res, expected_2, result_2);
-    // cudaDeviceSynchronize();
-    // print_field_tests(result_1);
-    // print_field_tests(result_2);
-
-    uint64 result_bool1, result_bool2;
-    comparator_kernel<<<1, 1>>>(final_res, expected_1, result_bool1);
-    comparator_kernel<<<1, 1>>>(final_res, expected_2, result_bool2);
-    *result = uint254{result_bool1, 0, 0, 0};
-    *result = uint254{result_bool2, 0, 0, 0};
-
+    comparator_kernel<<<1, 4>>>(final_res, expected_1, result_1);
+    comparator_kernel<<<1, 4>>>(final_res, expected_2, result_2);
     cudaDeviceSynchronize();
-    print_result_bool(result_bool1);
-    print_result_bool(result_bool2);
+    print_field_tests(result_1);
+    print_field_tests(result_2);
 }
 
 // Execute kernel with curve elements
 void execute_double_and_add_multiple(
-uint254 *a, uint254 *b, uin254 *c, uint254 *d, uint254 *result, uint254 *res_x, uint254 *res_y, uint254 *res_z, uint254 *expect_x, uint254 *expect_y, uint254 *expect_z) {
+uint254 &a, uint254 &b, uint254 &c, uint254 &d, uint254 &result, uint254 &res_x, uint254 *res_y, uint254 *res_z, uint254 *expect_x, uint254 *expect_y, uint254 *expect_z) {    
     // Allocate unified memory accessible by host and device
     fr_single *scalars;
     g1_single::element *points;
     g1_single::element *final_result;
     g1_single::element *expected_1;
     g1_single::element *expected_2;
-    uint254 *result_1;
-    uint254 *result_2;
-    cudaMallocManaged(&scalars, 2 * sizeof(fr_single));
-    cudaMallocManaged(&points, 2 * sizeof(g1_single::element));
-    cudaMallocManaged(&final_result, 1 * sizeof(g1_single::element));
-    cudaMallocManaged(&expected_1, 1 * sizeof(g1_single::element));
-    cudaMallocManaged(&expected_2, 1 * sizeof(g1_single::element));
-    cudaMallocManaged(&result_1, 1 * sizeof(uint254));
-    cudaMallocManaged(&result_2, 1 * sizeof(uint254));
+    var *result_1;
+    var *result_2;
+    cudaMallocManaged(&scalars, 2 * LIMBS * sizeof(var));
+    cudaMallocManaged(&points, 2 * 3 * LIMBS * sizeof(var));
+    cudaMallocManaged(&final_result, 3 * LIMBS * sizeof(var));
+    cudaMallocManaged(&expected_1, 3 * LIMBS * sizeof(var));
+    cudaMallocManaged(&expected_2, 3 * LIMBS * sizeof(var));
+    cudaMallocManaged(&result_1, LIMBS * sizeof(var));
+    cudaMallocManaged(&result_2, LIMBS * sizeof(var));
 
-    naive_multiplication_multiple<<<1, 1>>>(scalars, points, final_result);
+    naive_multiplication_multiple<<<BLOCKS, THREADS>>>(scalars, points, final_result);
     cudaDeviceSynchronize();
 
-    cout << "final_result: " << final_result.x.data << endl;
+    cout << "final_result: " << final_result[0].x.data[0] << endl;
 
     // Expected results from custom MSM kernel
-    // expected_1[0].x.data[0] = 0x7D08D399C74D6F60;
-    // expected_1[0].x.data[1] = 0x8B7E6B6EB490841B;
-    // expected_1[0].x.data[2] = 0xD4D3B85D62A522F0;
-    // expected_1[0].x.data[3] = 0xA88CC30AEC67D21;
-    // expected_1[0].y.data[0] = 0x4760C013E773E092;
-    // expected_1[0].y.data[1] = 0x27AF313043E09A67;
-    // expected_1[0].y.data[2] = 0x1B1C6848E1C81D14;
-    // expected_1[0].y.data[3] = 0xD404C6D6230ABCF;
-    // expected_1[0].z.data[0] = 0x8CEA309B633D24D2;
-    // expected_1[0].z.data[1] = 0xC02A4EA980DA9C0;
-    // expected_1[0].z.data[2] = 0x4C73226DC94B0750;
-    // expected_1[0].z.data[3] = 0x148BF6C82971F1A0;
-    expected_1[0].x.data.limbs = uint254{0x7D08D399C74D6F60, 0x8B7E6B6EB490841B, 0xD4D3B85D62A522F0, 0xA88CC30AEC67D21};
-    expected_1[0].y.data.limbs = uint254{0x4760C013E773E092, 0x27AF313043E09A67, 0x1B1C6848E1C81D14, 0xD404C6D6230ABCF};
-    expected_1[0].z.data.limbs = uint254{0x8CEA309B633D24D2, 0xC02A4EA980DA9C0, 0x4C73226DC94B0750, 0x148BF6C82971F1A0};
-
+    expected_1[0].x.data[0] = 0x7D08D399C74D6F60;
+    expected_1[0].x.data[1] = 0x8B7E6B6EB490841B;
+    expected_1[0].x.data[2] = 0xD4D3B85D62A522F0;
+    expected_1[0].x.data[3] = 0xA88CC30AEC67D21;
+    expected_1[0].y.data[0] = 0x4760C013E773E092;
+    expected_1[0].y.data[1] = 0x27AF313043E09A67;
+    expected_1[0].y.data[2] = 0x1B1C6848E1C81D14;
+    expected_1[0].y.data[3] = 0xD404C6D6230ABCF;
+    expected_1[0].z.data[0] = 0x8CEA309B633D24D2;
+    expected_1[0].z.data[1] = 0xC02A4EA980DA9C0;
+    expected_1[0].z.data[2] = 0x4C73226DC94B0750;
+    expected_1[0].z.data[3] = 0x148BF6C82971F1A0;
 
     // Expected results from naive double-and-add kernel
-    // expected_2[0].x.data[0] = 0x22D564276729916F;
-    // expected_2[0].x.data[1] = 0xCE84C2A015B18E50;
-    // expected_2[0].x.data[2] = 0xB609ED7D21C3346B;
-    // expected_2[0].x.data[3] = 0x5CBE8AB22BDF0611;
-    // expected_2[0].y.data[0] = 0x77D41ED256685368;
-    // expected_2[0].y.data[1] = 0x3AC1367E35FA7D3B;
-    // expected_2[0].y.data[2] = 0x35173845C2840DD4;
-    // expected_2[0].y.data[3] = 0x1353139CDE2A848F;
-    // expected_2[0].z.data[0] = 0xFBA158CF61C2E612;
-    // expected_2[0].z.data[1] = 0x8F32B98BC4097D0F;
-    // expected_2[0].z.data[2] = 0x82396ABF83AC1599;
-    // expected_2[0].z.data[3] = 0x21498DDAAB185B8C;
-    expected_2[0].x.data.limbs = uint254{0x22D564276729916F, 0xCE84C2A015B18E50, 0xB609ED7D21C3346B, 0x5CBE8AB22BDF0611};
-    expected_2[0].y.data.limbs = uint254{0x77D41ED256685368, 0x3AC1367E35FA7D3B, 0x35173845C2840DD4, 0x1353139CDE2A848F};
-    expected_2[0].z.data.limbs = uint254{0xFBA158CF61C2E612, 0x8F32B98BC4097D0F, 0x82396ABF83AC1599, 0x21498DDAAB185B8C};
+    expected_2[0].x.data[0] = 0x22D564276729916F;
+    expected_2[0].x.data[1] = 0xCE84C2A015B18E50;
+    expected_2[0].x.data[2] = 0xB609ED7D21C3346B;
+    expected_2[0].x.data[3] = 0x5CBE8AB22BDF0611;
+    expected_2[0].y.data[0] = 0x77D41ED256685368;
+    expected_2[0].y.data[1] = 0x3AC1367E35FA7D3B;
+    expected_2[0].y.data[2] = 0x35173845C2840DD4;
+    expected_2[0].y.data[3] = 0x1353139CDE2A848F;
+    expected_2[0].z.data[0] = 0xFBA158CF61C2E612;
+    expected_2[0].z.data[1] = 0x8F32B98BC4097D0F;
+    expected_2[0].z.data[2] = 0x82396ABF83AC1599;
+    expected_2[0].z.data[3] = 0x21498DDAAB185B8C;
 
-    // comparator_kernel<<<1, 1>>>(final_result, expected_1, result_1);
-    // comparator_kernel<<<1, 1>>>(final_result, expected_2, result_2);
-    // cudaDeviceSynchronize();
-    // print_field_tests(result_1);
-    // print_field_tests(result_2);
-
-    uint64 result_bool1, result_bool2;
-    comparator_kernel<<<1, 1>>>(final_res, expected_1, result_bool1);
-    comparator_kernel<<<1, 1>>>(final_res, expected_2, result_bool2);
-    *result = uint254{result_bool1, 0, 0, 0};
-    *result = uint254{result_bool2, 0, 0, 0};
-
+    comparator_kernel<<<1, 4>>>(final_result, expected_1, result_1);
+    comparator_kernel<<<1, 4>>>(final_result, expected_2, result_2);
     cudaDeviceSynchronize();
-    print_result_bool(result_bool1);
-    print_result_bool(result_bool2);
+    print_field_tests(result_1);
+    print_field_tests(result_2);
 }
 
 /* -------------------------- Main Entry Function ---------------------------------------------- */
@@ -1238,20 +1181,20 @@ int main(int, char**) {
     auto start = high_resolution_clock::now();
 
     // Define pointers to uint64_t type
-    uint254 *a, *b, *c, *d, *result, *res_x, *res_y, *res_z, *expect_x, *expect_y, *expect_z;
+    var *a, *b, *c, *d, *result, *res_x, *res_y, *res_z, *expect_x, *expect_y, *expect_z;
 
     // Allocate unified memory accessible by host and device
-    cudaMallocManaged(&a, sizeof(uint254));
-    cudaMallocManaged(&b, sizeof(uint254));
-    cudaMallocManaged(&c, sizeof(uint254));
-    cudaMallocManaged(&d, sizeof(uint254));
-    cudaMallocManaged(&result, sizeof(uint254));
-    cudaMallocManaged(&res_x, sizeof(uint254));
-    cudaMallocManaged(&res_y, sizeof(uint254));
-    cudaMallocManaged(&res_z, sizeof(uint254));
-    cudaMallocManaged(&expect_x, sizeof(uint254));
-    cudaMallocManaged(&expect_y, sizeof(uint254));
-    cudaMallocManaged(&expect_z, sizeof(uint254));
+    cudaMallocManaged(&a, LIMBS * sizeof(var));
+    cudaMallocManaged(&b, LIMBS * sizeof(var));
+    cudaMallocManaged(&c, LIMBS * sizeof(var));
+    cudaMallocManaged(&d, LIMBS * sizeof(var));
+    cudaMallocManaged(&result, LIMBS * sizeof(var));
+    cudaMallocManaged(&res_x, LIMBS * sizeof(var));
+    cudaMallocManaged(&res_y, LIMBS * sizeof(var));
+    cudaMallocManaged(&res_z, LIMBS * sizeof(var));
+    cudaMallocManaged(&expect_x, LIMBS * sizeof(var));
+    cudaMallocManaged(&expect_y, LIMBS * sizeof(var));
+    cudaMallocManaged(&expect_z, LIMBS * sizeof(var));
 
     // Execute kernel functions
     execute_kernels_finite_fields(a, b, c, d, result, res_x, res_y, res_z, expect_x, expect_y, expect_z);

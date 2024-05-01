@@ -37,20 +37,12 @@ add_executable(
     curves/curve_projective_test.cu
 )
 add_executable(
-    curve_bn254_test_single_2
-    curves/curve_projective_test_single.cu
-)
-add_executable(
     msm_test_cpu
     msm/msm_test_cpu.cpp
 )
 add_executable(
     msm_test_gpu
     msm/msm_test_gpu.cu
-)
-add_executable(
-    msm_test_gpu_single
-    msm/msm_test_gpu_single.cu
 )
 add_executable(
     sum_reduction_test
@@ -79,18 +71,8 @@ add_custom_target(
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 add_custom_target(
-    run_curve_bn254_test_single
-    COMMAND curve_bn254_test_single
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
-add_custom_target(
     run_curve_bn254_test_2
     COMMAND curve_bn254_test_2
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
-add_custom_target(
-    run_curve_bn254_test_single_2
-    COMMAND curve_bn254_test_single_2
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 target_link_libraries(
@@ -108,11 +90,6 @@ add_custom_target(
 add_custom_target(
     run_msm_test_gpu
     COMMAND msm_test_gpu
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
-add_custom_target(
-    run_msm_test_gpu_single
-    COMMAND msm_test_gpu_single
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 add_custom_target(

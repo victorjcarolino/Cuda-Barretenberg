@@ -7,7 +7,7 @@ namespace pippenger_common {
     cudaError_t status = expression;                                                        \
     if (status != cudaSuccess) {                                                            \
         cout << "CUDA error: " << cudaGetErrorString(status) << endl;                       \
-        throw std::runtime_error(cudaGetErrorString(status));                               \
+        throw cudaGetErrorString(status);                                                   \
     }                                                                                       \
 } while(0)
 

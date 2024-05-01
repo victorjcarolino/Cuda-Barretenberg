@@ -90,22 +90,25 @@ Context<point_t, scalar_t> *context, size_t npoints, g1::affine_element *points,
  */ 
 template <class P, class S>
 g1_gpu::element** msm_t<P, S>::msm_bucket_method(
-Context<point_t, scalar_t> *context, g1::affine_element *points, fr *scalars, int num_streams, int acc_buck_threads) {
+Context<point_t, scalar_t> *context, g1::affine_element *points, fr *scalars, int num_streams) {
     // Start timer
-
-    // Launch pippenger kernel
     cout << "starting pippenger!" << endl;
+    high_resolution_clock::time_point t1 = high_resolution_clock::now();
+
+    // Launch pippenger kernel    
     g1_gpu::element **result = new g1_gpu::element*[num_streams];
     for (int i = 0; i < num_streams; i++) { 
         result[i] = context->pipp.execute_bucket_method(
             context->pipp, context->pipp.device_scalar_ptrs.d_ptrs[i], context->pipp.device_base_ptrs.d_ptrs[i], 
-            BITSIZE, C, context->pipp.npoints, context->pipp.streams[i], acc_buck_threads
+            BITSIZE, C, context->pipp.npoints, context->pipp.streams[i]
         );
     }
+
+    high_resolution_clock::time_point t2 = high_resolution_clock::now();
     cout << "finished pippenger!" << endl;
 
-    // duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-    // std::cout << "Pippenger executed in " << time_span.count() << " seconds." << endl;
+    duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+    std::cout << "Pippenger executed in " << time_span.count() << " seconds." << endl;
 
     return result;
 }

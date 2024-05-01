@@ -8,7 +8,6 @@
 #include <ecc/curves/bn254/fr.hpp>
 #include <plonk/proof_system/types/program_settings.hpp>
 #include <plonk/reference_string/file_reference_string.hpp>
-#include <cuda_runtime.h>
 
 using namespace std;
 using namespace barretenberg;
@@ -17,36 +16,10 @@ namespace pippenger_common {
 
 #define BITSIZE 254
 #define C 10
-size_t NUM_POINTS = 1 << 14;
+size_t NUM_POINTS = 1 << 11;
 
 typedef element<fq_gpu, fr_gpu> point_t;
 typedef fr_gpu scalar_t;
-
-// wrapper for timing a function and printing the time. For usage, pass in a lambda that calls the desired kernel
-/*
-#define TIME_PRINT(void (*timed_function)(), char* routine_name) do {
-    high_resolution_clock::time_point t1 = high_resolution_clock::now();
-    timed_function();
-    high_resolution_clock::time_point t2 = high_resolution_clock::now();
-    duration<double> time_span = duration_cast<duration<double>>(accum_buckets_t2 - accum_buckets_t1);
-    std::cout << routine_name << " in " << accum_buckets_time_span.count() << " seconds." << endl;
-}
-*/ 
-
-#define TIME_PRINT(timed_function) { \
-    cudaEvent_t start, stop; \
-    cudaEventCreate(&start); \
-    cudaEventCreate(&stop); \
-    cudaEventRecord(start); \
-    timed_function; \
-    cudaEventRecord(stop); \
-    cudaEventSynchronize(stop); \
-    float milliseconds = 0; \
-    cudaEventElapsedTime(&milliseconds, start, stop); \
-    printf("Time elapsed: %f ms\n", milliseconds); \
-    cudaEventDestroy(start); \
-    cudaEventDestroy(stop); \
-}
 
 /**
  * Allocate device storage and buffers 
@@ -108,7 +81,7 @@ class pippenger_t {
         void verify_result(point_t *result_1, point_t **result_2);
         
         point_t* execute_bucket_method(
-            pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsigned c, size_t npoints, cudaStream_t stream, int acc_buck_threads
+            pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsigned c, size_t npoints, cudaStream_t stream
         );
 
         void execute_cub_routines(pippenger_t &config, cub_routines *params, cudaStream_t stream);

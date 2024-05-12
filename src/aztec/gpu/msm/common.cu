@@ -32,6 +32,8 @@ void run_timed(const char *routine_name, F func) {
 template <class point_t, class scalar_t>
 point_t* pippenger_t<point_t, scalar_t>::execute_bucket_method(
 pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsigned c, size_t npoints, cudaStream_t stream, int acc_buck_threads) {
+    typedef gpu_barretenberg_single::gpu_group_elements_single::element_single<gpu_barretenberg_single::fq_single, gpu_barretenberg_single::fr_single> point_single_t;
+    
     // Initialize dynamic cub_routines object
     config.params = new cub_routines();
 
@@ -84,12 +86,17 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
         unsigned NUM_THREADS_2 = acc_buck_threads;
         unsigned NUM_BLOCKS_2 = ((config.num_buckets + NUM_THREADS_2 - 1) / NUM_THREADS_2);
 
-        typedef gpu_barretenberg_single::gpu_group_elements_single::element_single<gpu_barretenberg_single::fq_single, gpu_barretenberg_single::fr_single> point_single_t;
         point_single_t *buckets_single = reinterpret_cast<point_single_t *>(buckets);
         point_single_t *points_single = reinterpret_cast<point_single_t *>(points);
-        accumulate_buckets_kernel<<<NUM_BLOCKS_2, NUM_THREADS_2, 0, stream>>>
-                (buckets_single, params->bucket_offsets, params->bucket_sizes, params->single_bucket_indices, 
-                params->point_indices, points_single, config.num_buckets);
+        // accumulate_buckets_kernel<<<NUM_BLOCKS_2, NUM_THREADS_2, 0, stream>>>
+        //         (buckets_single, params->bucket_offsets, params->bucket_sizes, params->single_bucket_indices, 
+        //         params->point_indices, points_single, config.num_buckets);
+
+        thrust::device_vector<point_single_t> device_points = (std::vector<point_single_t>(points_single, points_single + npoints));
+        thrust::device_vector<point_single_t> device_buckets = (std::vector<point_single_t>(buckets_single, buckets_single + config.num_buckets));
+        thrust::device_vector<unsigned> device_point_indices = std::vector<unsigned>(params->point_indices, params->point_indices + npoints);
+        thrust::device_vector<unsigned> device_bucket_indices = std::vector<unsigned>(params->bucket_indices, params->bucket_indices + config.num_buckets);
+        accumulate_buckets_thrust(device_buckets, device_bucket_indices, device_point_indices, device_points);
 
         // // Bucket accumulation kernel // original cooperative group accumulate_buckets_kernel
         // unsigned NUM_THREADS_2 = 1 << 8;
@@ -108,11 +115,11 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
     });
 
         // // Final accumulation kernel
-    // point_t *res;
+    //point_t *res;
     // CUDA_WRAPPER(cudaMallocManaged(&res, 3 * 4 * sizeof(uint64_t)));
     //  // CUDA_WRAPPER(cudaMallocManaged(&res, sizeof(point_t)));
-    // point_single_t *final_sum_single = reinterpret_cast<point_single_t *>(final_sum);
-    // point_single_t *res_single = reinterpret_cast<point_single_t *>(res);
+    point_single_t *final_sum_single = reinterpret_cast<point_single_t *>(final_sum);
+    point_single_t *res_single = reinterpret_cast<point_single_t *>(res);
     
     // high_resolution_clock::time_point final_accum_t1 = high_resolution_clock::now();
     // final_accumulation_kernel<<<1, 1, 0, stream>>>(final_sum_single, res_single, windows, c);
@@ -127,13 +134,12 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
     
     // Final accumulation kernels
     run_timed("final accumulation kernel", [&](){
-        // typedef gpu_barretenberg_single::gpu_group_elements_single::element_single<gpu_barretenberg_single::fq_single, gpu_barretenberg_single::fr_single> point_single_t;
-        // point_single_t *final_sum_single = reinterpret_cast<point_single_t *>(final_sum);
-        // point_single_t *res_single = reinterpret_cast<point_single_t *>(res);
-        // final_accumulation_kernel<<<1, 1, 0, stream>>>(final_sum_single, res_single, windows, c);
+        final_accumulation_kernel<<<1, 1, 0, stream>>>(final_sum_single, res_single, windows, c);
 
         // Final accumulation kernel
-        final_accumulation_kernel<<<1, 4, 0, stream>>>(final_sum, res, windows, c);
+        // final_accumulation_kernel<<<1, 4, 0, stream>>>(final_sum, res, windows, c);
+            // Expects: (g1_gpu::element *final_sum, g1_gpu::element *final_result, size_t num_bucket_modules, unsigned c)
+            // Receives: (point_t *final_sum, point_t *res, unsigned windows, unsigned c)
         cudaStreamSynchronize(stream);
     });
 
@@ -172,6 +178,7 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
 /**
  * CUB routines referenced from: https://github.com/ingonyama-zk/icicle (inspired by zkSync's era-bellman-cuda library)
  */
+/* Used in common.cu */
 template <class point_t, class scalar_t>
 void pippenger_t<point_t, scalar_t>::execute_cub_routines(pippenger_t &config, cub_routines *params, cudaStream_t stream) {
     CUDA_WRAPPER(cudaMallocAsync(&(params->single_bucket_indices), sizeof(unsigned) * config.num_buckets, stream));

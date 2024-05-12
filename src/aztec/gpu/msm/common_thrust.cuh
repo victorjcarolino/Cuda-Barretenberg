@@ -13,7 +13,7 @@
 using namespace std;
 using namespace barretenberg;
 
-namespace pippenger_common {
+namespace pippenger_common_thrust {
 
 #define BITSIZE 254
 #define C 10

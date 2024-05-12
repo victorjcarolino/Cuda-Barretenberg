@@ -1,4 +1,4 @@
-#include "common.cuh"
+#include "common_thrust.cuh"
 #include <cooperative_groups.h>
 #include <cuda.h>
 
@@ -13,25 +13,23 @@ namespace pippenger_common {
 /**
  * Naive multiplication kernel
  */
-__global__ void multiplication_kernel(thrust::device_vector<g1_gpu::element> point, thrust::device_vector<fr_gpu> scalar, thrust::device_vector<g1_gpu::element> result_vec, size_t npoints) { 
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void multiplication_kernel(thrust::device_vector<g1_single::element> point, thrust::device_vector<fr_single> scalar, thrust::device_vector<g1_gpu::element> result_vec, size_t npoints) { 
+    // Ensure the vectors are the same size
+    assert(point.size() == scalar.size());
+
+    // Resize the result vector to hold the output
+    result_vec.resize(point.size());
+
+    // Perform the element-wise multiplication
+    thrust::transform(point.begin(), point.end(), scalar.begin(), result_vec.begin(), [&](g1_single::element p, fr_single s) 
+        __device__ {
+        g1_single::element result;
+        fq_single::mul(p.x, s.data, result.x);
+        fq_single::mul(p.y, s.data, result.y);
+        fq_single::mul(p.z, s.data, result.z);
+        return result;
+    });
     
-    // Parameters for coperative groups
-    auto grp = fixnum::layout();
-    int subgroup = grp.meta_group_rank();
-    int subgroup_size = grp.meta_group_size();
-
-    // 3 * N field multiplications
-    fq_gpu::mul(point[(subgroup + (subgroup_size * blockIdx.x))].x.data[tid % 4], 
-                scalar[(subgroup + (subgroup_size * blockIdx.x))].data[tid % 4], 
-                result_vec[(subgroup + (subgroup_size * blockIdx.x))].x.data[tid % 4]);
-    fq_gpu::mul(point[(subgroup + (subgroup_size * blockIdx.x))].y.data[tid % 4], 
-                scalar[(subgroup + (subgroup_size * blockIdx.x))].data[tid % 4], 
-                result_vec[(subgroup + (subgroup_size * blockIdx.x))].y.data[tid % 4]);
-    fq_gpu::mul(point[(subgroup + (subgroup_size * blockIdx.x))].z.data[tid % 4], 
-                scalar[(subgroup + (subgroup_size * blockIdx.x))].data[tid % 4], 
-                result_vec[(subgroup + (subgroup_size * blockIdx.x))].z.data[tid % 4]);
-
     
 }
 
@@ -116,63 +114,56 @@ __global__ void sum_reduction_kernel(g1_gpu::element *points, g1_gpu::element *r
 /**
  * Double and add implementation for multiple points and scalars using bit-decomposition with time complexity: O(k)
  */ 
-__global__ void double_and_add_kernel(fr_gpu *test_scalars, g1_gpu::element *test_points, g1_gpu::element *final_result, size_t num_points) {
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void double_and_add_kernel(<fr_single> test_scalars, g1_gpu::element *test_points, g1_gpu::element *final_result, size_t num_points) {
+    g1_single::element R_single;
+    g1_single::element Q_single;
 
-    g1_gpu::element R;
-    g1_gpu::element Q;
+    // Initialize result as 0
+    fq_single::zero(final_result[0].x.data);
+    fq_single::zero(final_result[0].y.data);
+    fq_single::zero(final_result[0].z.data);
 
-    if (tid < LIMBS) {
-        // Initialize result as 0
-        fq_gpu::load(0, final_result[0].x.data[tid % 4]); 
-        fq_gpu::load(0, final_result[0].y.data[tid % 4]); 
-        fq_gpu::load(0, final_result[0].z.data[tid % 4]); 
-        // Loop for each bucket module
-        for (unsigned z = 0; z < num_points; z++) {
-            // Initialize 'R' to the identity element, Q to the curve point
-            fq_gpu::load(0, R.x.data[tid % 4]); 
-            fq_gpu::load(0, R.y.data[tid % 4]); 
-            fq_gpu::load(0, R.z.data[tid % 4]); 
+    // Loop for each bucket module
+    for (unsigned z = 0; z < num_points; z++) {
+        // Initialize 'R' to the identity element, Q to the curve point
+        fq_single::zero(R_single.x.data);
+        fq_single::zero(R_single.y.data);
+        fq_single::zero(R_single.z.data);
 
-            // Load partial sums
-            fq_gpu::load(test_points[z].x.data[tid % 4], Q.x.data[tid % 4]);
-            fq_gpu::load(test_points[z].y.data[tid % 4], Q.y.data[tid % 4]);
-            fq_gpu::load(test_points[z].z.data[tid % 4], Q.z.data[tid % 4]);
+        // Load partial sums
+        thrust::copy(test_points[z].x.data, test_points[z].x.data, Q_single.x.data);
+        thrust::copy(test_points[z].y.data, test_points[z].y.data, Q_single.y.data);
+        thrust::copy(test_points[z].z.data, test_points[z].z.data, Q_single.z.data);
 
-            // Sync loads
-            __syncthreads();
-    
-            // Loop for each limb starting with the last limb
-            for (int j = 3; j >= 0; j--) {
-                // Loop for each bit of scalar
-                for (int i = 64; i >= 0; i--) {   
-                    // Performs bit-decompositon by traversing the bits of the scalar from MSB to LSB
-                    // and extracting the i-th bit of scalar in limb.
-                    if (((test_scalars[z].data[j] >> i) & 1) ? 1 : 0)
-                        g1_gpu::add(
-                            Q.x.data[tid % 4], Q.y.data[tid % 4], Q.z.data[tid % 4], 
-                            R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4], 
-                            R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4]
-                        );
-                    if (i != 0) 
-                        g1_gpu::doubling(
-                            R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4], 
-                            R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4]
-                        );
-                }
+        // Sync loads
+        __syncthreads();
+
+        // Loop for each limb starting with the last limb
+        for (int j = 3; j >= 0; j--) {
+            // Loop for each bit of scalar
+            for (int i = 64; i >= 0; i--) {   
+                // Performs bit-decompositon by traversing the bits of the scalar from MSB to LSB
+                // and extracting the i-th bit of scalar in limb.
+                if (((test_scalars[z].data[j] >> i) & 1) ? 1 : 0)
+                    thrust::transform(Q_single.x.data, Q_single.y.data, Q_single.z.data, R_single.x.data, R_single.y.data, R_single.z.data, 
+                        [=] __device__ (uint254 qX, uint254 qY, uint254 qZ, uint254 rX, uint254 rY, uint254 rZ) {
+                            g1_single::add(qX, qY, qZ, rX, rY, rZ, rX, rY, Rz);
+                        }
+                    );
+                if (i != 0) 
+                    thrust::transform(R_single.x.data, R_single.y.data, R_single.z.data, R_single.x.data, R_single.y.data, R_single.z.data, 
+                        [=] __device__ (uint254 rX, uint254 rY, uint254 rZ) {
+                            g1_single::doubling(rX, rY, rZ, rX, rY, rZ);
+                        }
+                    );
             }
-            g1_gpu::add(
-                R.x.data[tid % 4], 
-                R.y.data[tid % 4], 
-                R.z.data[tid % 4],
-                final_result[0].x.data[tid % 4],
-                final_result[0].y.data[tid % 4],
-                final_result[0].z.data[tid % 4],
-                final_result[0].x.data[tid % 4], 
-                final_result[0].y.data[tid % 4], 
-                final_result[0].z.data[tid % 4]
-            );
         }
+
+        thrust::transform(R_single.x.data, R_single.y.data, R_single.z.data, final_result[0].x.data, final_result[0].y.data, final_result[0].z.data, 
+            [=] __device__ (uint254 rX, uint254 rY, uint254 rZ) {
+                g1_single::add(rX, rY, rZ, final_result[0].x.data, final_result[0].y.data, final_result[0].z.data, final_result[0].x.data, final_result[0].y.data, final_result[0].z.data);
+            }
+        );
     }
 }
 
@@ -182,28 +173,28 @@ __global__ void double_and_add_kernel(fr_gpu *test_scalars, g1_gpu::element *tes
  * Initialize buckets kernel for large MSM
  */
 // This is just initializing the buckets in GPU to zero. I guess no need to convert
-__global__ void initialize_buckets_kernel(g1_gpu::element *bucket) {     
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+// __global__ void initialize_buckets_kernel(g1_gpu::element *bucket) {     
+//     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     
-    // Parameters for coperative groups
-    auto grp = fixnum::layout();
-    int subgroup = grp.meta_group_rank();
-    int subgroup_size = grp.meta_group_size();
+//     // Parameters for coperative groups
+//     auto grp = fixnum::layout();
+//     int subgroup = grp.meta_group_rank();
+//     int subgroup_size = grp.meta_group_size();
 
-    // Load zero value into the three coordinates of the each element in the bucket
-    fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].x.data[tid % 4]);
-    fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].y.data[tid % 4]);
-    fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].z.data[tid % 4]);
-}
-
-// __global__ void initialize_buckets_kernel_thrust(g1_gpu::element *bucket) {  
-//     int tid = blockIdx.x * blockDim.x + threadIdx.x;   
-    
-//     // set bucket[i].x.data
+//     // Load zero value into the three coordinates of the each element in the bucket
 //     fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].x.data[tid % 4]);
 //     fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].y.data[tid % 4]);
 //     fq_gpu::load(fq_gpu::zero().data[tid % 4], bucket[subgroup + (subgroup_size * blockIdx.x)].z.data[tid % 4]);
 // }
+
+__global__ void initialize_buckets_kernel(thrust::device_vector<g1_single::element> buckets) {
+    thrust::transform(buckets.begin(), buckets.end(), buckets.begin(), [=] __device__ (g1_single::element bucket) {
+        // Load zero value into the three coordinates of the each element in the bucket
+        fq_single::load(fq_single::zero(), bucket.x.data);
+        fq_single::load(fq_single::zero(), bucket.y.data);
+        fq_single::load(fq_single::zero(), bucket.z.data);
+    }); 
+}
 
 
 
@@ -313,6 +304,8 @@ __global__ void split_scalars_kernel
 /**
  * Accumulation kernel adds up points in each bucket -- this can be swapped out for efficient sum reduction kernel (tree reduction method)
  */
+
+/* CONVERT TO THRUST */
 __global__ void accumulate_buckets_kernel 
 (g1_single::element *buckets, unsigned *bucket_offsets, unsigned *bucket_sizes, unsigned *single_bucket_indices, 
 unsigned *point_indices, g1_single::element *points, unsigned num_buckets) {
@@ -336,6 +329,25 @@ unsigned *point_indices, g1_single::element *points, unsigned num_buckets) {
     if (bucket_size == 0) { 
         return;
     }
+    
+    // let b/c = 2 (2 windows) . // let c = 3 // 2^c = 8
+    // let n=4
+    // [10G_1, 41G_2, 1G_3, 3G_4]
+    // bucket_indices: [0,0,0,1,2,3,3,3] // size = n * b/c
+
+    // bucket_indices: [0,0,0,1,2,3,3,3] // size = n * b/c
+        // tells you which bucket each point belongs to
+        // an array that contains the bucket index for each point. If you have n points and each point 
+            // belongs to a certain bucket, then bucket_indices is an array of size n where the i-th 
+            // element is the bucket index of the i-th point. This array is used to determine which 
+            // bucket each point belongs to.
+    // single_bucket_indices:[0,3,4,5] // size = 2^c * b/c   // function from [0,2^c * b/c] -> []
+        // single_bucket_indices: []
+        // tells you where each unique value first appears in the original array
+    // bucket_offsets: [0, 3, 4, 5]
+        // tells you where to place each unique value in the sorted array 
+        // used to calculate the starting index for each bucket in the sorted array
+    
 
     for (unsigned i = 0; i < bucket_size; i++) { 
         g1_single::add(
@@ -365,9 +377,43 @@ unsigned *point_indices, g1_single::element *points, unsigned num_buckets) {
     }
 }
 
+__global__ void accumulate_buckets_thrust(thrust::device_vector<g1_single::element> buckets, thrust::device_vector<unsigned> bucket_indices, 
+thrust::device_vector<unsigned> point_indices, thrust::device_vector<g1_single::element> points){
+    // bucket_offsets = how many points into the list a given bucket starts at
+    // bucket_sizes = size of bucket 1, size of bucket 2, ...
+    // single_bucket_indices = 
+    // point_indices = index of a given point in the 'points' vector
+    // points = all points (a point is split up into different points for each window)
+
+    // bucket_indices = [1, 1, 2, 3, 5]
+
+    // single_bucket_indices = [] n*b/c size
+
+    // points = [1G_1, 3G_2, 5G_3, 2_G_4, 1_G5]
+    // point_indices = [0, 4, 3, 1, 2]
+
+    // points_ordered [1G_1, 1G_5, 2G_4, 3G_2, 5G_3]
+
+    // gather with input param->points to 
+    // thurst::gather()
+
+    // // within a given bucket:
+    // thrust::reduce(thrust::make_permutation_iterator(points.begin() + bucket_offset, point_indices.begin() + bucket_offset), 
+    //                 thrust::make_permutation_iterator(points.begin() + bucket_offset, point_indices.begin() + bucket_offset + bucket_size));
+
+    thrust::device_vector<g1_single::element> sorted_points(points.size());
+    // // one option for sorting points
+    // thrust::sort_by_keys(points, points + points.size(), point_indices);
+    thrust::gather(point_indices.begin(), point_indices.end(), points.begin(), sorted_points.begin());
+        // assuming some bucket_indices = [1,1,2,3,5], and points is sorted as desribed by point_indices
+    thrust::reduce_by_key(bucket_indices.begin(), bucket_indices.end(), points_.begin(), 
+                            thrust::make_discard_iterator(), buckets.begin()); 
+}
+
 /** 
  * Running sum kernel that accumulates partial bucket sums using running sum method
  */
+/* CONVERT TO THRUST */
 __global__ void bucket_running_sum_kernel(g1_gpu::element *buckets, g1_gpu::element *final_sum, uint64_t c) {     
     // Global thread ID
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -453,7 +499,7 @@ __global__ void bucket_running_sum_kernel_2(g1_gpu::element *buckets, g1_gpu::el
     fq_gpu::load(0x0, G.x.data[tid % 4]);
     fq_gpu::load(0x0, G.y.data[tid % 4]);
     fq_gpu::load(0x0, G.z.data[tid % 4]);
-    
+
     fq_gpu::load(0x0, S.x.data[tid % 4]);
     fq_gpu::load(0x0, S.y.data[tid % 4]);
     fq_gpu::load(0x0, S.z.data[tid % 4]);
@@ -636,6 +682,8 @@ __global__ void bucket_running_sum_kernel_3(g1_gpu::element *result, g1_gpu::ele
 /**
  * Final bucket accumulation to produce single group element
  */
+
+/* CONVERT TO THRUST */
 __global__ void final_accumulation_kernel(g1_gpu::element *final_sum, g1_gpu::element *final_result, size_t num_bucket_modules, unsigned c) {
 int tid = blockIdx.x * blockDim.x + threadIdx.x;
 

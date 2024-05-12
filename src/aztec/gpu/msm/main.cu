@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     // long long acc_buck_threads = atoll(argv[2]);
-    long long acc_buck_threads = 7;
+    long long acc_buck_threads = 1;
     NUM_POINTS = n;
 
     // Initialize dynamic 'msm_t' object 

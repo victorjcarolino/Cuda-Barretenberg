@@ -114,6 +114,8 @@ __global__ void sum_reduction_kernel(g1_gpu::element *points, g1_gpu::element *r
 /**
  * Double and add implementation for multiple points and scalars using bit-decomposition with time complexity: O(k)
  */ 
+
+/* Used in Pippenger.cu */
 __global__ void double_and_add_kernel(fr_gpu *test_scalars, g1_gpu::element *test_points, g1_gpu::element *final_result, size_t num_points) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -180,6 +182,8 @@ __global__ void double_and_add_kernel(fr_gpu *test_scalars, g1_gpu::element *tes
  * Initialize buckets kernel for large MSM
  */
 // This is just initializing the buckets in GPU to zero. I guess no need to convert
+
+/* Used in Common.cu */
 __global__ void initialize_buckets_kernel(g1_gpu::element *bucket) {     
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     
@@ -231,6 +235,8 @@ __device__ __forceinline__ uint64_t decompose_scalar_digit(fr_gpu scalar, unsign
  * Decompose b-bit scalar into c-bit scalar, where c <= b
  * Convert to thrust
  */
+
+/* Used in common.cu */
 __global__ void split_scalars_kernel
 (unsigned *bucket_indices, unsigned *point_indices, fr_gpu *scalars, unsigned npoints, unsigned num_bucket_modules, unsigned c) {         
     unsigned bucket_index;
@@ -348,19 +354,61 @@ unsigned *point_indices, g1_single::element *points, unsigned num_buckets) {
             buckets[bucket_index].z.data
         );
 
-        // if (fq_single::is_zero(buckets[bucket_index].x.data) && 
-        //     fq_single::is_zero(buckets[bucket_index].y.data) && 
-        //     fq_single::is_zero(buckets[bucket_index].z.data)) {
-        //         g1_single::doubling(
-        //             points[point_indices[bucket_offset + i]].x.data, 
-        //             points[point_indices[bucket_offset + i]].y.data, 
-        //             points[point_indices[bucket_offset + i]].z.data, 
-        //             buckets[bucket_index].x.data, 
-        //             buckets[bucket_index].y.data, 
-        //             buckets[bucket_index].z.data
-        //         );
-        // }
+        if (fq_single::is_zero(buckets[bucket_index].x.data) && 
+            fq_single::is_zero(buckets[bucket_index].y.data) && 
+            fq_single::is_zero(buckets[bucket_index].z.data)) {
+                g1_single::doubling(
+                    points[point_indices[bucket_offset + i]].x.data, 
+                    points[point_indices[bucket_offset + i]].y.data, 
+                    points[point_indices[bucket_offset + i]].z.data, 
+                    buckets[bucket_index].x.data, 
+                    buckets[bucket_index].y.data, 
+                    buckets[bucket_index].z.data
+                );
+        }
     }
+}
+
+struct point_add_functor {
+        __device__ g1_single::element operator()(g1_single::element a, g1_single::element b) const {
+
+            g1_single::add(a.x.data,
+                            a.y.data,
+                            a.z.data, 
+                            b.x.data,
+                            b.y.data,
+                            b.z.data,
+                            a.x.data,
+                            a.y.data,
+                            a.z.data);
+            return a;
+        }        
+    };
+
+void accumulate_buckets_thrust(thrust::device_vector<g1_single::element> buckets, thrust::device_vector<unsigned> bucket_indices, 
+thrust::device_vector<unsigned> point_indices, thrust::device_vector<g1_single::element> points){
+    thrust::device_vector<g1_single::element> sorted_points(points.size());
+    // struct gather_functor {
+    //     const int* input;
+    //     const int* map;
+
+    //     gather_functor(int* _input, int* _map) : input(_input), map(_map) {}
+
+    //     __device__ int operator()(const int& idx) const {
+    //         return input[map[idx]];
+    //     }
+    // };
+    
+    for(size_t i=0; i< points.size(); i++){
+        sorted_points[i] = points[point_indices[i]];
+    }
+    
+    thrust::device_vector<unsigned> dummy_key_output(buckets.size());
+    // assuming some bucket_indices = [1,1,2,3,5], and points is sorted as desribed by point_indices
+    point_add_functor add_op;
+    thrust::equal_to<unsigned> binary_pred;
+    thrust::reduce_by_key(thrust::device, bucket_indices.begin(), bucket_indices.end(), sorted_points.begin(), 
+                            dummy_key_output.begin(), buckets.begin(), binary_pred, add_op); 
 }
 
 /** 
@@ -634,159 +682,159 @@ __global__ void bucket_running_sum_kernel_3(g1_gpu::element *result, g1_gpu::ele
 /**
  * Final bucket accumulation to produce single group element
  */
-__global__ void final_accumulation_kernel(g1_gpu::element *final_sum, g1_gpu::element *final_result, size_t num_bucket_modules, unsigned c) {
-int tid = blockIdx.x * blockDim.x + threadIdx.x;
+// __global__ void final_accumulation_kernel(g1_gpu::element *final_sum, g1_gpu::element *final_result, size_t num_bucket_modules, unsigned c) {
+// int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-    g1_gpu::element R;
-    g1_gpu::element Q;
+//     g1_gpu::element R;
+//     g1_gpu::element Q;
 
-    fr_gpu exponent{ 1024, 0, 0, 0 };
+//     fr_gpu exponent{ 1024, 0, 0, 0 };
 
-    if (tid < LIMBS) {
-        // Initialize result as 0
-        fq_gpu::load(0, final_result[0].x.data[tid % 4]); 
-        fq_gpu::load(0, final_result[0].y.data[tid % 4]); 
-        fq_gpu::load(0, final_result[0].z.data[tid % 4]); 
-        // Loop for each bucket module
-        for (unsigned z = 26; z > 0; z--) {
-            // Initialize 'R' to the identity element, Q to the curve point
-            fq_gpu::load(0, R.x.data[tid % 4]); 
-            fq_gpu::load(0, R.y.data[tid % 4]); 
-            fq_gpu::load(0, R.z.data[tid % 4]); 
+//     if (tid < LIMBS) {
+//         // Initialize result as 0
+//         fq_gpu::load(0, final_result[0].x.data[tid % 4]); 
+//         fq_gpu::load(0, final_result[0].y.data[tid % 4]); 
+//         fq_gpu::load(0, final_result[0].z.data[tid % 4]); 
+//         // Loop for each bucket module
+//         for (unsigned z = 26; z > 0; z--) {
+//             // Initialize 'R' to the identity element, Q to the curve point
+//             fq_gpu::load(0, R.x.data[tid % 4]); 
+//             fq_gpu::load(0, R.y.data[tid % 4]); 
+//             fq_gpu::load(0, R.z.data[tid % 4]); 
 
-            // Load partial sums
-            fq_gpu::load(final_result[0].x.data[tid % 4], Q.x.data[tid % 4]);
-            fq_gpu::load(final_result[0].y.data[tid % 4], Q.y.data[tid % 4]);
-            fq_gpu::load(final_result[0].z.data[tid % 4], Q.z.data[tid % 4]);
+//             // Load partial sums
+//             fq_gpu::load(final_result[0].x.data[tid % 4], Q.x.data[tid % 4]);
+//             fq_gpu::load(final_result[0].y.data[tid % 4], Q.y.data[tid % 4]);
+//             fq_gpu::load(final_result[0].z.data[tid % 4], Q.z.data[tid % 4]);
 
-            // Sync loads
-            __syncthreads();
+//             // Sync loads
+//             __syncthreads();
 
-            // Loop for each limb starting with the last limb
-            for (int j = 3; j >= 0; j--) {
-                // Loop for each bit of scalar
-                for (int i = 64; i >= 0; i--) {   
-                    // Performs bit-decompositon by traversing the bits of the scalar from MSB to LSB,
-                    // extracting the i-th bit of scalar in limb.
-                    if (((exponent.data[j] >> i) & 1) ? 1 : 0)
-                        g1_gpu::add(
-                            Q.x.data[tid % 4], Q.y.data[tid % 4], Q.z.data[tid % 4], 
-                            R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4], 
-                            R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4]
-                        );
-                    if (i != 0) 
-                        g1_gpu::doubling(
-                            R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4], 
-                            R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4]
-                        );
-                }
-            }
-            g1_gpu::add(
-                R.x.data[tid % 4], 
-                R.y.data[tid % 4], 
-                R.z.data[tid % 4],
-                final_sum[z - 1].x.data[tid % 4],
-                final_sum[z - 1].y.data[tid % 4],
-                final_sum[z - 1].z.data[tid % 4],
-                final_result[0].x.data[tid % 4], 
-                final_result[0].y.data[tid % 4], 
-                final_result[0].z.data[tid % 4]
-            );
+//             // Loop for each limb starting with the last limb
+//             for (int j = 3; j >= 0; j--) {
+//                 // Loop for each bit of scalar
+//                 for (int i = 64; i >= 0; i--) {   
+//                     // Performs bit-decompositon by traversing the bits of the scalar from MSB to LSB,
+//                     // extracting the i-th bit of scalar in limb.
+//                     if (((exponent.data[j] >> i) & 1) ? 1 : 0)
+//                         g1_gpu::add(
+//                             Q.x.data[tid % 4], Q.y.data[tid % 4], Q.z.data[tid % 4], 
+//                             R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4], 
+//                             R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4]
+//                         );
+//                     if (i != 0) 
+//                         g1_gpu::doubling(
+//                             R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4], 
+//                             R.x.data[tid % 4], R.y.data[tid % 4], R.z.data[tid % 4]
+//                         );
+//                 }
+//             }
+//             g1_gpu::add(
+//                 R.x.data[tid % 4], 
+//                 R.y.data[tid % 4], 
+//                 R.z.data[tid % 4],
+//                 final_sum[z - 1].x.data[tid % 4],
+//                 final_sum[z - 1].y.data[tid % 4],
+//                 final_sum[z - 1].z.data[tid % 4],
+//                 final_result[0].x.data[tid % 4], 
+//                 final_result[0].y.data[tid % 4], 
+//                 final_result[0].z.data[tid % 4]
+//             );
 
-            if (fq_gpu::is_zero(final_result[0].x.data[tid % 4]) 
-                && fq_gpu::is_zero(final_result[0].y.data[tid % 4]) 
-                && fq_gpu::is_zero(final_result[0].z.data[tid % 4])) {
-                g1_gpu::doubling(
-                    R.x.data[tid % 4],
-                    R.y.data[tid % 4],
-                    R.z.data[tid % 4], 
-                    final_result[0].x.data[tid % 4],
-                    final_result[0].y.data[tid % 4],
-                    final_result[0].z.data[tid % 4]
-                );
-            }
-        }
-    }
-}
+//             if (fq_gpu::is_zero(final_result[0].x.data[tid % 4]) 
+//                 && fq_gpu::is_zero(final_result[0].y.data[tid % 4]) 
+//                 && fq_gpu::is_zero(final_result[0].z.data[tid % 4])) {
+//                 g1_gpu::doubling(
+//                     R.x.data[tid % 4],
+//                     R.y.data[tid % 4],
+//                     R.z.data[tid % 4], 
+//                     final_result[0].x.data[tid % 4],
+//                     final_result[0].y.data[tid % 4],
+//                     final_result[0].z.data[tid % 4]
+//                 );
+//             }
+//         }
+//     }
+// }
 
 // /**
 //  * Final bucket accumulation to produce single group element
 //  */
-// __global__ void final_accumulation_kernel(g1_single::element *final_sum, g1_single::element *final_result, size_t num_bucket_modules, unsigned c) {
-//     g1_single::element R;
-//     g1_single::element Q;
+__global__ void final_accumulation_kernel(g1_single::element *final_sum, g1_single::element *final_result, size_t num_bucket_modules, unsigned c) {
+    g1_single::element R;
+    g1_single::element Q;
 
-//     // 1024 = 2^10 = 2^C
-//     fr_gpu exponent{ 1024, 0, 0, 0 };
+    // 1024 = 2^10 = 2^C
+    fr_gpu exponent{ 1024, 0, 0, 0 };
 
-//     // Initialize result as 0
-//     fq_single::load(0, final_result[0].x.data); 
-//     fq_single::load(0, final_result[0].y.data); 
-//     fq_single::load(0, final_result[0].z.data); 
-//     // Loop for each bucket module
-//     // 26 = B/C by default
-//     for (unsigned z = 26; z > 0; z--) {
-//         // Initialize 'R' to the identity element, Q to the curve point
-//         fq_single::load(0, R.x.data); 
-//         fq_single::load(0, R.y.data); 
-//         fq_single::load(0, R.z.data); 
+    // Initialize result as 0
+    fq_single::load(0, final_result[0].x.data); 
+    fq_single::load(0, final_result[0].y.data); 
+    fq_single::load(0, final_result[0].z.data); 
+    // Loop for each bucket module
+    // 26 = B/C by default
+    for (unsigned z = 26; z > 0; z--) {
+        // Initialize 'R' to the identity element, Q to the curve point
+        fq_single::load(0, R.x.data); 
+        fq_single::load(0, R.y.data); 
+        fq_single::load(0, R.z.data); 
 
-//         // Load partial sums
-//         fq_single::load(final_result[0].x.data, Q.x.data);
-//         fq_single::load(final_result[0].y.data, Q.y.data);
-//         fq_single::load(final_result[0].z.data, Q.z.data);
+        // Load partial sums
+        fq_single::load(final_result[0].x.data, Q.x.data);
+        fq_single::load(final_result[0].y.data, Q.y.data);
+        fq_single::load(final_result[0].z.data, Q.z.data);
 
-//         // Sync loads
-//         __syncthreads();
+        // Sync loads
+        __syncthreads();
 
-//         // Loop for each limb starting with the last limb
-//         // R = Q^1024
-//         for (int j = 3; j >= 0; j--) {
-//             // Loop for each bit of scalar
-//             for (int i = 64; i >= 0; i--) {   
-//                 // Performs bit-decompositon by traversing the bits of the scalar from MSB to LSB,
-//                 // extracting the i-th bit of scalar in limb.
-//                 if (((exponent.data[j] >> i) & 1) ? 1 : 0)
-//                     g1_single::add(
-//                         Q.x.data, Q.y.data, Q.z.data, 
-//                         R.x.data, R.y.data, R.z.data, 
-//                         R.x.data, R.y.data, R.z.data
-//                     );
-//                 if (i != 0) 
-//                     g1_single::doubling(
-//                         R.x.data, R.y.data, R.z.data, 
-//                         R.x.data, R.y.data, R.z.data
-//                     );
-//             }
-//         }
-//         // final_result = final_sum[z-1] + R
-//         g1_single::add(
-//             R.x.data, 
-//             R.y.data, 
-//             R.z.data,
-//             final_sum[z - 1].x.data,
-//             final_sum[z - 1].y.data,
-//             final_sum[z - 1].z.data,
-//             final_result[0].x.data, 
-//             final_result[0].y.data, 
-//             final_result[0].z.data
-//         );
+        // Loop for each limb starting with the last limb
+        // R = Q^1024
+        for (int j = 3; j >= 0; j--) {
+            // Loop for each bit of scalar
+            for (int i = 64; i >= 0; i--) {   
+                // Performs bit-decompositon by traversing the bits of the scalar from MSB to LSB,
+                // extracting the i-th bit of scalar in limb.
+                if (((exponent.data[j] >> i) & 1) ? 1 : 0)
+                    g1_single::add(
+                        Q.x.data, Q.y.data, Q.z.data, 
+                        R.x.data, R.y.data, R.z.data, 
+                        R.x.data, R.y.data, R.z.data
+                    );
+                if (i != 0) 
+                    g1_single::doubling(
+                        R.x.data, R.y.data, R.z.data, 
+                        R.x.data, R.y.data, R.z.data
+                    );
+            }
+        }
+        // final_result = final_sum[z-1] + R
+        g1_single::add(
+            R.x.data, 
+            R.y.data, 
+            R.z.data,
+            final_sum[z - 1].x.data,
+            final_sum[z - 1].y.data,
+            final_sum[z - 1].z.data,
+            final_result[0].x.data, 
+            final_result[0].y.data, 
+            final_result[0].z.data
+        );
 
-//         // if (final_result == 0) { final_result = 2*R; }
-//         if (fq_single::is_zero(final_result[0].x.data) 
-//             && fq_single::is_zero(final_result[0].y.data) 
-//             && fq_single::is_zero(final_result[0].z.data)) {
-//             g1_single::doubling(
-//                 R.x.data,
-//                 R.y.data,
-//                 R.z.data, 
-//                 final_result[0].x.data,
-//                 final_result[0].y.data,
-//                 final_result[0].z.data
-//             );
-//         }
-//     }
-// }
+        // if (final_result == 0) { final_result = 2*R; }
+        if (fq_single::is_zero(final_result[0].x.data) 
+            && fq_single::is_zero(final_result[0].y.data) 
+            && fq_single::is_zero(final_result[0].z.data)) {
+            g1_single::doubling(
+                R.x.data,
+                R.y.data,
+                R.z.data, 
+                final_result[0].x.data,
+                final_result[0].y.data,
+                final_result[0].z.data
+            );
+        }
+    }
+}
 
 /* ----------------------------------------- Helper Kernels ---------------------------------------------- */
 

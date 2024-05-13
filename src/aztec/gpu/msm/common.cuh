@@ -72,15 +72,15 @@ class device_ptr {
  */
 class cub_routines {
     public:
-        unsigned *bucket_offsets;
-        unsigned *bucket_sizes;
-        unsigned *single_bucket_indices;
+        // unsigned *bucket_offsets;
+        // unsigned *bucket_sizes;
+        // unsigned *single_bucket_indices;
         unsigned *bucket_indices;
         unsigned *point_indices;
         unsigned *sort_indices_temp_storage;
-        unsigned *nof_buckets_to_compute;
-        unsigned *encode_temp_storage;
-        unsigned *offsets_temp_storage;
+        // unsigned *nof_buckets_to_compute;
+        // unsigned *encode_temp_storage;
+        // unsigned *offsets_temp_storage;
 };
 
 /**

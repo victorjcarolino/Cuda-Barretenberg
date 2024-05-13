@@ -81,22 +81,22 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
     // Bucket accumulation kernel
     run_timed("accumulate buckets kernel", [&](){
         // unsigned NUM_THREADS_2 = 1 << 5;
-        unsigned NUM_THREADS_2 = acc_buck_threads;
-        unsigned NUM_BLOCKS_2 = ((config.num_buckets + NUM_THREADS_2 - 1) / NUM_THREADS_2);
+        // unsigned NUM_THREADS_2 = acc_buck_threads;
+        // unsigned NUM_BLOCKS_2 = ((config.num_buckets + NUM_THREADS_2 - 1) / NUM_THREADS_2);
 
-        typedef gpu_barretenberg_single::gpu_group_elements_single::element_single<gpu_barretenberg_single::fq_single, gpu_barretenberg_single::fr_single> point_single_t;
-        point_single_t *buckets_single = reinterpret_cast<point_single_t *>(buckets);
-        point_single_t *points_single = reinterpret_cast<point_single_t *>(points);
-        accumulate_buckets_kernel<<<NUM_BLOCKS_2, NUM_THREADS_2, 0, stream>>>
-                (buckets_single, params->bucket_offsets, params->bucket_sizes, params->single_bucket_indices, 
-                params->point_indices, points_single, config.num_buckets);
-
-        // // Bucket accumulation kernel // original cooperative group accumulate_buckets_kernel
-        // unsigned NUM_THREADS_2 = 1 << 8;
-        // unsigned NUM_BLOCKS_2 = ((config.num_buckets + NUM_THREADS_2 - 1) / NUM_THREADS_2) * 4;
+        // typedef gpu_barretenberg_single::gpu_group_elements_single::element_single<gpu_barretenberg_single::fq_single, gpu_barretenberg_single::fr_single> point_single_t;
+        // point_single_t *buckets_single = reinterpret_cast<point_single_t *>(buckets);
+        // point_single_t *points_single = reinterpret_cast<point_single_t *>(points);
         // accumulate_buckets_kernel<<<NUM_BLOCKS_2, NUM_THREADS_2, 0, stream>>>
-        //     (buckets, params->bucket_offsets, params->bucket_sizes, params->single_bucket_indices, 
-        //     params->point_indices, points, config.num_buckets);
+        //         (buckets_single, params->bucket_offsets, params->bucket_sizes, params->single_bucket_indices, 
+        //         params->point_indices, points_single, config.num_buckets);
+
+        // Bucket accumulation kernel // original cooperative group accumulate_buckets_kernel
+        unsigned NUM_THREADS_2 = 1 << 8;
+        unsigned NUM_BLOCKS_2 = ((config.num_buckets + NUM_THREADS_2 - 1) / NUM_THREADS_2) * 4;
+        accumulate_buckets_kernel<<<NUM_BLOCKS_2, NUM_THREADS_2, 0, stream>>>
+            (buckets, params->bucket_offsets, params->bucket_sizes, params->single_bucket_indices, 
+            params->point_indices, points, config.num_buckets);
         
         cudaStreamSynchronize(stream);
     });
@@ -163,7 +163,7 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
         CUDA_WRAPPER(cudaFreeAsync(params->bucket_offsets, stream));
         CUDA_WRAPPER(cudaFreeAsync(params->offsets_temp_storage, stream));
         CUDA_WRAPPER(cudaFree(final_sum));
-        CUDA_WRAPPER(cudaFree(res));
+        // CUDA_WRAPPER(cudaFree(res));
     });
 
     return res;

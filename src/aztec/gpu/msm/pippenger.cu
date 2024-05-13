@@ -74,7 +74,7 @@ g1_gpu::element* msm_t<P, S>::msm_double_and_add(
 Context<point_t, scalar_t> *context, size_t npoints, g1::affine_element *points, fr *scalars) {
     // Allocate unified memory and launch kernel 
     g1_gpu::element *result;
-    CUDA_WRAPPER(cudaMallocManaged(&result, 3 * NUM_POINTS * LIMBS * sizeof(uint64_t)));
+    CUDA_WRAPPER(cudaMallocManaged(&result, 3 * NUM_POINTS * LIMBS * sizeof(uint64_t))); // NUM_POINTS * sizeof(g1_gpu::element)
     double_and_add_kernel<<<1, 4, 0, 0>>>(
         context->pipp.device_scalar_ptrs.d_ptrs[0], context->pipp.device_base_ptrs.d_ptrs[0], result, npoints
     );

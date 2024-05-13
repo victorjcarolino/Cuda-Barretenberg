@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
         usage();
         return 1;
     }
-    long long NUM_POINTS = atoll(argv[1]);
+    NUM_POINTS = static_cast<size_t>(atoll(argv[1]));
     if (NUM_POINTS == 0 || NUM_POINTS > SIZE_MAX)
     {
         usage();
@@ -53,6 +53,7 @@ int main(int argc, char *argv[])
     int num_streams = 1;
 
     // Initialize dynamic pippenger 'context' object
+    cout << "initialize pippenger context" << endl;
     Context<point_t, scalar_t> *context = msm->pippenger_initialize(points, &scalars[0], num_streams, NUM_POINTS);
     g1_gpu::element *result_1;
     if (verify)
@@ -60,7 +61,6 @@ int main(int argc, char *argv[])
         // Execute "Double-And-Add" reference kernel
         cout << "start double and add..." << endl;
         result_1 = msm->msm_double_and_add(context, NUM_POINTS, points, &scalars[0]);
-        cout << "initialize pippenger context" << endl;
     }
 
     // Execute "Pippenger's Bucket Method" kernel

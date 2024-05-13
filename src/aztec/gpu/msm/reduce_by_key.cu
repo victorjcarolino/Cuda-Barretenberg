@@ -6,6 +6,7 @@
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
+#include <thrust/device_vector.h>
 
 template <typename ValueType, typename TailFlagType, typename AssociativeOperator>
 struct reduce_by_key_functor
@@ -25,6 +26,8 @@ struct reduce_by_key_functor
   }
 };
 
+typedef unsigned int FlagType;
+
 template <typename ExecutionPolicy,
           typename InputIterator1,
           typename InputIterator2,
@@ -40,11 +43,14 @@ __host__ void reduce_by_key_into_map(
   InputIterator3 scatter_map,
   OutputIterator1 values_output,
   BinaryPredicate binary_pred,
-  BinaryFunction binary_op)
+  BinaryFunction binary_op,
+  thrust::device_vector<FlagType> &head_flags,
+  thrust::device_vector<FlagType> &tail_flags,
+  thrust::device_vector<FlagType> &scanned_tail_flags,
+  thrust::device_vector<typename thrust::iterator_value<InputIterator2>::type> &scanned_values
+  )
 {
   typedef typename thrust::iterator_traits<InputIterator1>::difference_type difference_type;
-
-  typedef unsigned int FlagType; // TODO use difference_type
 
   // Use the input iterator's value type per https://wg21.link/P0571
   using ValueType = typename thrust::iterator_value<InputIterator2>::type;
@@ -60,7 +66,7 @@ __host__ void reduce_by_key_into_map(
   InputIterator2 values_last = values_first + n;
 
   // compute head flags
-  thrust::device_vector<FlagType> head_flags(n);
+  // thrust::device_vector<FlagType> head_flags(n);
   printf("Here\n");
   fflush(stdout);
   thrust::transform(
@@ -68,7 +74,7 @@ __host__ void reduce_by_key_into_map(
   head_flags[0] = 1;
 
   // compute tail flags
-  thrust::device_vector<FlagType> tail_flags(n); // COPY INSTEAD OF TRANSFORM
+  // thrust::device_vector<FlagType> tail_flags(n); // COPY INSTEAD OF TRANSFORM
   printf("Here1\n");
   fflush(stdout);
   thrust::transform(
@@ -76,8 +82,8 @@ __host__ void reduce_by_key_into_map(
   tail_flags[n - 1] = 1;
 
   // scan the values by flag
-  thrust::device_vector<ValueType> scanned_values(n);
-  thrust::device_vector<FlagType> scanned_tail_flags(n);
+  // thrust::device_vector<ValueType> scanned_values(n);
+  // thrust::device_vector<FlagType> scanned_tail_flags(n);
 
   thrust::inclusive_scan(
     exec,

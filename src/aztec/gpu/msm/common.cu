@@ -62,7 +62,7 @@ namespace pippenger_common
 
         unsigned NUM_BLOCKS = (config.num_buckets + NUM_THREADS - 1) / NUM_THREADS;
         run_timed("malloc (num_buckets*sizeof(point_t)", [&]()
-                  { CUDA_WRAPPER(cudaMallocAsync(&buckets, config.num_buckets * 3 * 4 * sizeof(uint64_t), stream)); });
+                  { CUDA_WRAPPER(cudaMallocAsync(&buckets, config.num_buckets * sizeof(point_single_t), stream)); });
         run_timed("malloc npoints * #windows", [&]()
                   {
         CUDA_WRAPPER(cudaMallocAsync(&(params->bucket_indices), sizeof(unsigned) * npoints * (windows + 1), stream));
@@ -70,22 +70,33 @@ namespace pippenger_common
         point_t *final_sum;
         run_timed("malloc (#windows*sizeof(point_t)", [&]()
                   {
-                      CUDA_WRAPPER(cudaMallocAsync(&final_sum, windows * 3 * 4 * sizeof(uint64_t), stream));
-                      // CUDA_WRAPPER(cudaMallocAsync(&final_sum, windows * sizeof(point_t), stream));
+                      CUDA_WRAPPER(cudaMallocAsync(&final_sum, windows * sizeof(point_single_t), stream));
                   });
         point_t *res;
-        run_timed("final accumulation malloc", [&]()
-                  { CUDA_WRAPPER(cudaMallocManaged(&res, 3 * 4 * sizeof(uint64_t))); });
+        thrust::device_vector<FlagType> head_flags;
+        thrust::device_vector<FlagType> tail_flags;
+        thrust::device_vector<FlagType> scanned_tail_flags;
+        thrust::device_vector<point_single_t> scanned_values;
+        run_timed("final accumulation malloc", [&]() {
+            CUDA_WRAPPER(cudaMallocManaged(&res, sizeof(point_single_t)));
+            size_t n = npoints * config.windows;
+            head_flags = thrust::device_vector<FlagType>(n);
+            tail_flags = thrust::device_vector<FlagType>(n);
+            scanned_tail_flags = thrust::device_vector<FlagType>(n);
+            scanned_values = thrust::device_vector<point_single_t>(n);
+        });
 
-        // CUDA_WRAPPER(cudaMallocAsync(&buckets, config.num_buckets * sizeof(point_t), stream));
+        // TODO: Fix initialize_bucket_kernel to be correct for npoints that is not a power of NUM_THREADS
         run_timed("init buckets kernel", [&]()
                   {
-        initialize_buckets_kernel<<<NUM_BLOCKS * 4, NUM_THREADS, 0, stream>>>(buckets); 
+        // initialize_buckets_kernel<<<NUM_BLOCKS * 4, NUM_THREADS, 0, stream>>>(buckets); 
+        CUDA_WRAPPER(cudaMemsetAsync(buckets, 0, config.num_buckets * sizeof(point_single_t), stream));
         cudaStreamSynchronize(stream); });
 
         // Scalars decomposition kernel
         run_timed("split scalars kernel", [&]()
                   {
+        // TODO split_scalars_kernel - currently only works for npoints that is a multiple of NUM_THREADS
         split_scalars_kernel<<<NUM_POINTS / NUM_THREADS, NUM_THREADS, 0, stream>>>
                 (params->bucket_indices + npoints, params->point_indices + npoints, scalars, npoints, windows, c);
         cudaStreamSynchronize(stream); });
@@ -104,7 +115,6 @@ namespace pippenger_common
         // - binary op: point add functor
 
         // make points_single and buckets_single
-        // typedef gpu_barretenberg_single::gpu_group_elements_single::element_single<gpu_barretenberg_single::fq_single, gpu_barretenberg_single::fr_single> point_single_t;
         point_single_t *buckets_single = reinterpret_cast<point_single_t *>(buckets);
         point_single_t *points_single = reinterpret_cast<point_single_t *>(points);
 
@@ -119,7 +129,11 @@ namespace pippenger_common
                 params->bucket_indices,
                 buckets_single,
                 thrust::equal_to{},
-                padd_functor{}
+                padd_functor{},
+                head_flags,
+                tail_flags,
+                scanned_tail_flags,
+                scanned_values
             );
             // cudaStreamSynchronize(stream);
             cudaDeviceSynchronize();
@@ -134,7 +148,6 @@ namespace pippenger_common
         // // Final accumulation kernel
         // point_t *res;
         // CUDA_WRAPPER(cudaMallocManaged(&res, 3 * 4 * sizeof(uint64_t)));
-        //  // CUDA_WRAPPER(cudaMallocManaged(&res, sizeof(point_t)));
         // point_single_t *final_sum_single = reinterpret_cast<point_single_t *>(final_sum);
         // point_single_t *res_single = reinterpret_cast<point_single_t *>(res);
 
@@ -188,7 +201,8 @@ namespace pippenger_common
         // CUDA_WRAPPER(cudaFreeAsync(params->bucket_offsets, stream));
         // CUDA_WRAPPER(cudaFreeAsync(params->offsets_temp_storage, stream));
         CUDA_WRAPPER(cudaFree(final_sum));
-        CUDA_WRAPPER(cudaFree(res)); });
+        // CUDA_WRAPPER(cudaFree(res));
+                  });
 
         return res;
     }

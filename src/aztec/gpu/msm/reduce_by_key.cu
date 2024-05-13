@@ -67,16 +67,14 @@ __host__ void reduce_by_key_into_map(
 
   // compute head flags
   // thrust::device_vector<FlagType> head_flags(n);
-  printf("Here\n");
-  fflush(stdout);
+  // fflush(stdout);
   thrust::transform(
     exec, keys_first, keys_last - 1, keys_first + 1, head_flags.begin() + 1, thrust::detail::not2(binary_pred));
   head_flags[0] = 1;
 
   // compute tail flags
   // thrust::device_vector<FlagType> tail_flags(n); // COPY INSTEAD OF TRANSFORM
-  printf("Here1\n");
-  fflush(stdout);
+  // fflush(stdout);
   thrust::transform(
     exec, keys_first, keys_last - 1, keys_first + 1, tail_flags.begin(), thrust::detail::not2(binary_pred));
   tail_flags[n - 1] = 1;

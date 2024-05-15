@@ -90,7 +90,7 @@ Context<point_t, scalar_t> *context, size_t npoints, g1::affine_element *points,
  */ 
 template <class P, class S>
 g1_gpu::element** msm_t<P, S>::msm_bucket_method(
-Context<point_t, scalar_t> *context, g1::affine_element *points, fr *scalars, int num_streams, int acc_buck_threads) {
+Context<point_t, scalar_t> *context, g1::affine_element *points, fr *scalars, int num_streams) {
     // Start timer
 
     // Launch pippenger kernel
@@ -99,7 +99,7 @@ Context<point_t, scalar_t> *context, g1::affine_element *points, fr *scalars, in
     for (int i = 0; i < num_streams; i++) { 
         result[i] = context->pipp.execute_bucket_method(
             context->pipp, context->pipp.device_scalar_ptrs.d_ptrs[i], context->pipp.device_base_ptrs.d_ptrs[i], 
-            BITSIZE, C, context->pipp.npoints, context->pipp.streams[i], acc_buck_threads
+            BITSIZE, C, context->pipp.npoints, context->pipp.streams[i]
         );
     }
     cout << "finished pippenger!" << endl;

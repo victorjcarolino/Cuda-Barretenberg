@@ -18,6 +18,7 @@ namespace pippenger_common {
 #define BITSIZE 254
 #define C 10
 size_t NUM_POINTS = 1 << 14;
+bool TEST_REDUCE = false;
 
 typedef element<fq_gpu, fr_gpu> point_t;
 typedef fr_gpu scalar_t;
@@ -108,7 +109,7 @@ class pippenger_t {
         void verify_result(point_t *result_1, point_t **result_2);
         
         point_t* execute_bucket_method(
-            pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsigned c, size_t npoints, cudaStream_t stream, int acc_buck_threads
+            pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsigned c, size_t npoints, cudaStream_t stream
         );
 
         void execute_cub_routines(pippenger_t &config, cub_routines *params, cudaStream_t stream);

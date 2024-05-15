@@ -15,7 +15,7 @@ using namespace barretenberg;
 
 void usage()
 {
-    printf("Usage: pippenger_cu <num_points> <num_acc_bucket_threads> <verify>\n");
+    printf("Usage: pippenger_cu <num_points> <verify> <test_reduce>\n");
 }
 
 int main(int argc, char *argv[])
@@ -31,8 +31,8 @@ int main(int argc, char *argv[])
         usage();
         return 1;
     }
-    long long acc_buck_threads = atoll(argv[2]);
-    int verify = atoi(argv[3]);
+    int verify = atoi(argv[2]);
+    TEST_REDUCE = atoi(argv[3]);
 
     // Initialize dynamic 'msm_t' object
     msm_t<point_t, scalar_t> *msm = new msm_t<point_t, scalar_t>();
@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 
     // Execute "Pippenger's Bucket Method" kernel
     cout << "start pippenger..." << endl;
-    g1_gpu::element **result_2 = msm->msm_bucket_method(context, points, &scalars[0], num_streams, acc_buck_threads);
+    g1_gpu::element **result_2 = msm->msm_bucket_method(context, points, &scalars[0], num_streams);
 
     if (verify)
     {

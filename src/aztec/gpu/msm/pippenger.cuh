@@ -19,7 +19,7 @@ class msm_t {
         );
 
         g1_gpu::element** msm_bucket_method(
-            Context<point_t, scalar_t> *context, g1::affine_element* points, fr *scalars, int num_streams, int acc_buck_threads
+            Context<point_t, scalar_t> *context, g1::affine_element* points, fr *scalars, int num_streams
         );
 };
 

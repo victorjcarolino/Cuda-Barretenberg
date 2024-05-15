@@ -43,16 +43,16 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
     cudaDeviceSynchronize();
     t1 = high_resolution_clock::now();
 
-    size_t n = npoints * config.windows;
-    thrust::device_vector<FlagType> head_flags;
-    thrust::device_vector<FlagType> tail_flags;
-    thrust::device_vector<FlagType> scanned_tail_flags;
-    if (TEST_REDUCE) {
-        head_flags = thrust::device_vector<FlagType>(n);
-        tail_flags = thrust::device_vector<FlagType>(n);
-        scanned_tail_flags = thrust::device_vector<FlagType>(n);
-    }
-    thrust::device_vector<point_single_t> scanned_values(n);
+    // size_t n = npoints * config.windows;
+    // thrust::device_vector<FlagType> head_flags;
+    // thrust::device_vector<FlagType> tail_flags;
+    // thrust::device_vector<FlagType> scanned_tail_flags;
+    // if (TEST_REDUCE) {
+    //     head_flags = thrust::device_vector<FlagType>(n);
+    //     tail_flags = thrust::device_vector<FlagType>(n);
+    //     scanned_tail_flags = thrust::device_vector<FlagType>(n);
+    // }
+    // thrust::device_vector<point_single_t> scanned_values(n);
 
     // Initialize dynamic cub_routines object
     config.params = new cub_routines();
@@ -64,8 +64,8 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
     CUDA_WRAPPER(cudaMallocAsync(&buckets, config.num_buckets * sizeof(point_single_t), stream));
     
     // Bucket initialization kernel
-    // initialize_buckets_kernel<<<NUM_BLOCKS * 4, NUM_THREADS, 0, stream>>>(buckets); 
-    CUDA_WRAPPER(cudaMemsetAsync(buckets, 0, config.num_buckets * sizeof(point_single_t), stream));
+    initialize_buckets_kernel<<<NUM_BLOCKS * 4, NUM_THREADS, 0, stream>>>(buckets); 
+    // CUDA_WRAPPER(cudaMemsetAsync(buckets, 0, config.num_buckets * sizeof(point_single_t), stream));
 
     // Scalars decomposition kernel
     CUDA_WRAPPER(cudaMallocAsync(&(params->bucket_indices), sizeof(unsigned) * npoints * (windows + 1), stream));
@@ -76,51 +76,51 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
     // Execute CUB routines for determining bucket sizes, offsets, etc. 
     execute_cub_routines(config, config.params, stream);
 
-    // // Bucket accumulation kernel
-    // unsigned NUM_THREADS_2 = 1 << 8;
-    // unsigned NUM_BLOCKS_2 = ((config.num_buckets + NUM_THREADS_2 - 1) / NUM_THREADS_2) * 4;
-    // accumulate_buckets_kernel<<<NUM_BLOCKS_2, NUM_THREADS_2, 0, stream>>>
-    //     (buckets, params->bucket_offsets, params->bucket_sizes, params->single_bucket_indices, 
-    //     params->point_indices, points, config.num_buckets);
-
     // Bucket accumulation kernel
-    point_single_t *buckets_single = reinterpret_cast<point_single_t *>(buckets);
-    point_single_t *points_single = reinterpret_cast<point_single_t *>(points);
-    auto points_iter = thrust::make_permutation_iterator(points_single, params->point_indices);
-    if (TEST_REDUCE) {
-        reduce_by_key_into_map(
-            thrust::cuda::par_nosync.on(stream),
-            params->bucket_indices,
-            params->bucket_indices + npoints * config.windows,
-            points_iter,
-            params->bucket_indices,
-            buckets_single,
-            thrust::equal_to<>{},
-            padd_functor{},
-            head_flags,
-            tail_flags,
-            scanned_tail_flags,
-            scanned_values
-        );
-    } else {
-        auto [_, scanned_values_end] = thrust::reduce_by_key(
-            thrust::cuda::par_nosync.on(stream),
-            params->bucket_indices,
-            params->bucket_indices + npoints * config.windows,
-            points_iter,
-            params->bucket_indices,
-            scanned_values.begin(),
-            thrust::equal_to<>{},
-            padd_functor{}
-        );
-        thrust::scatter(
-            thrust::cuda::par_nosync.on(stream),
-            scanned_values.begin(),
-            scanned_values_end,
-            params->bucket_indices,
-            buckets_single
-        );
-    }
+    unsigned NUM_THREADS_2 = 1 << 8;
+    unsigned NUM_BLOCKS_2 = ((config.num_buckets + NUM_THREADS_2 - 1) / NUM_THREADS_2) * 4;
+    accumulate_buckets_kernel<<<NUM_BLOCKS_2, NUM_THREADS_2, 0, stream>>>
+        (buckets, params->bucket_offsets, params->bucket_sizes, params->single_bucket_indices, 
+        params->point_indices, points, config.num_buckets);
+
+    // // Bucket accumulation kernel
+    // point_single_t *buckets_single = reinterpret_cast<point_single_t *>(buckets);
+    // point_single_t *points_single = reinterpret_cast<point_single_t *>(points);
+    // auto points_iter = thrust::make_permutation_iterator(points_single, params->point_indices);
+    // if (TEST_REDUCE) {
+    //     reduce_by_key_into_map(
+    //         thrust::cuda::par_nosync.on(stream),
+    //         params->bucket_indices,
+    //         params->bucket_indices + npoints * config.windows,
+    //         points_iter,
+    //         params->bucket_indices,
+    //         buckets_single,
+    //         thrust::equal_to<>{},
+    //         padd_functor{},
+    //         head_flags,
+    //         tail_flags,
+    //         scanned_tail_flags,
+    //         scanned_values
+    //     );
+    // } else {
+    //     auto [_, scanned_values_end] = thrust::reduce_by_key(
+    //         thrust::cuda::par_nosync.on(stream),
+    //         params->bucket_indices,
+    //         params->bucket_indices + npoints * config.windows,
+    //         points_iter,
+    //         params->bucket_indices,
+    //         scanned_values.begin(),
+    //         thrust::equal_to<>{},
+    //         padd_functor{}
+    //     );
+    //     thrust::scatter(
+    //         thrust::cuda::par_nosync.on(stream),
+    //         scanned_values.begin(),
+    //         scanned_values_end,
+    //         params->bucket_indices,
+    //         buckets_single
+    //     );
+    // }
 
     // Running sum kernel
     point_t *final_sum;
@@ -151,12 +151,12 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
     CUDA_WRAPPER(cudaFreeAsync(params->bucket_indices, stream));
     CUDA_WRAPPER(cudaFreeAsync(params->point_indices, stream));
     CUDA_WRAPPER(cudaFreeAsync(params->sort_indices_temp_storage, stream));
-    // CUDA_WRAPPER(cudaFreeAsync(params->single_bucket_indices, stream));
-    // CUDA_WRAPPER(cudaFreeAsync(params->bucket_sizes, stream));
-    // CUDA_WRAPPER(cudaFreeAsync(params->nof_buckets_to_compute, stream));
-    // CUDA_WRAPPER(cudaFreeAsync(params->encode_temp_storage, stream));
-    // CUDA_WRAPPER(cudaFreeAsync(params->bucket_offsets, stream));
-    // CUDA_WRAPPER(cudaFreeAsync(params->offsets_temp_storage, stream));
+    CUDA_WRAPPER(cudaFreeAsync(params->single_bucket_indices, stream));
+    CUDA_WRAPPER(cudaFreeAsync(params->bucket_sizes, stream));
+    CUDA_WRAPPER(cudaFreeAsync(params->nof_buckets_to_compute, stream));
+    CUDA_WRAPPER(cudaFreeAsync(params->encode_temp_storage, stream));
+    CUDA_WRAPPER(cudaFreeAsync(params->bucket_offsets, stream));
+    CUDA_WRAPPER(cudaFreeAsync(params->offsets_temp_storage, stream));
     CUDA_WRAPPER(cudaFree(final_sum));
     // CUDA_WRAPPER(cudaFree(res));
 
@@ -169,42 +169,46 @@ pippenger_t &config, scalar_t *scalars, point_t *points, unsigned bitsize, unsig
 template <class point_t, class scalar_t>
 void pippenger_t<point_t, scalar_t>::execute_cub_routines(pippenger_t &config, cub_routines *params, cudaStream_t stream) {
     // Radix sort algorithm
-    size_t sort_indices_temp_storage_bytes;
-
-    // sort [npoints:2*npoints] into [0:npoints] by lower 32 bits
-    cub::DeviceRadixSort::SortPairs(
-        params->sort_indices_temp_storage,
-        sort_indices_temp_storage_bytes,
-        params->bucket_indices + npoints, // keys_in
-        params->bucket_indices,           // keys_out
-        params->point_indices + npoints,  // values_in
-        params->point_indices,            // values_out
-        npoints,                          // num_items
-        0,                                // begin_bit
-        sizeof(unsigned) * 8,             // end_bit
-        stream);
+    size_t sort_indices_temp_storage_bytes; 
+    cub::DeviceRadixSort::SortPairs(params->sort_indices_temp_storage, sort_indices_temp_storage_bytes, params->bucket_indices 
+                                    + npoints, params->bucket_indices, params->point_indices + npoints, params->point_indices, 
+                                    npoints, 0, sizeof(unsigned) * 8, stream);
     CUDA_WRAPPER(cudaMallocAsync(&(params->sort_indices_temp_storage), sort_indices_temp_storage_bytes, stream));
-
-
-    for (unsigned i = 0; i < config.windows; i++)
-    {
+    for (unsigned i = 0; i < config.windows; i++) {
         unsigned offset_out = i * npoints;
         unsigned offset_in = offset_out + npoints;
-
-        // sort [(i+1)*npoints:(i+2)*npoints] into [i*npoints:(i+1)*npoints] by lower 32 bits
-        cub::DeviceRadixSort::SortPairs(
-            params->sort_indices_temp_storage,
-            sort_indices_temp_storage_bytes,
-            params->bucket_indices + offset_in,  // keys_in
-            params->bucket_indices + offset_out, // keys_out
-            params->point_indices + offset_in,   // values_in
-            params->point_indices + offset_out,  // values_out
-            npoints,                             // num_items
-            0,                                   // start_bit
-            sizeof(unsigned) * 8,                // end_bit
-            stream);
+        cub::DeviceRadixSort::SortPairs(params->sort_indices_temp_storage, sort_indices_temp_storage_bytes, params->bucket_indices 
+                                        + offset_in, params->bucket_indices + offset_out, params->point_indices + offset_in, 
+                                        params->point_indices + offset_out, npoints, 0, sizeof(unsigned) * 8, stream);
     }
+
+    // Perform length encoding
+    CUDA_WRAPPER(cudaMallocAsync(&(params->single_bucket_indices), sizeof(unsigned) * config.num_buckets, stream));
+
+    // TODO: THIS ALLOCATION NEEDS TO BE CHANGED AND WILL VARY RUNTIME OF PIPPENGER FOR SOME REASON
+    CUDA_WRAPPER(cudaMallocAsync(&(params->bucket_sizes), sizeof(unsigned) * config.num_buckets * config.num_buckets, stream));
+    CUDA_WRAPPER(cudaMallocAsync(&(params->nof_buckets_to_compute), sizeof(unsigned), stream));
+    size_t encode_temp_storage_bytes = 0;
+    cub::DeviceRunLengthEncode::Encode(params->encode_temp_storage, encode_temp_storage_bytes, params->bucket_indices, 
+                                       params->single_bucket_indices, params->bucket_sizes, params->nof_buckets_to_compute, 
+                                       config.windows * npoints, stream);
+    CUDA_WRAPPER(cudaMallocAsync(&(params->encode_temp_storage), encode_temp_storage_bytes, stream));
+    cub::DeviceRunLengthEncode::Encode(params->encode_temp_storage, encode_temp_storage_bytes, params->bucket_indices, 
+                                       params->single_bucket_indices, params->bucket_sizes, params->nof_buckets_to_compute, 
+                                       config.windows * npoints, stream);
+
+    // Free bucket_indices here
+
+    // Calculate bucket offsets
+    CUDA_WRAPPER(cudaMallocAsync(&(params->bucket_offsets), sizeof(unsigned) * config.num_buckets, stream));
+    size_t offsets_temp_storage_bytes = 0;
+    cub::DeviceScan::ExclusiveSum(params->offsets_temp_storage, offsets_temp_storage_bytes, params->bucket_sizes, 
+                                  params->bucket_offsets, config.num_buckets, stream);
+    CUDA_WRAPPER(cudaMallocAsync(&(params->offsets_temp_storage), offsets_temp_storage_bytes, stream));
+    cub::DeviceScan::ExclusiveSum(params->offsets_temp_storage, offsets_temp_storage_bytes, params->bucket_sizes, 
+                                  params->bucket_offsets, config.num_buckets, stream);
 }
+
 
 /**
  * Calculate number of windows and buckets

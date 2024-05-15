@@ -261,61 +261,61 @@ namespace pippenger_common
 
     // Instead of accessing scalars[tid], we'll use thrust to iterate of the scalars vector
 
-    // /**
-    //  * Accumulation kernel adds up points in each bucket -- this can be swapped out for efficient sum reduction kernel (tree reduction method)
-    //  */
-    // __global__ void accumulate_buckets_kernel
-    // (g1_gpu::element *buckets, unsigned *bucket_offsets, unsigned *bucket_sizes, unsigned *single_bucket_indices,
-    // unsigned *point_indices, g1_gpu::element *points, unsigned num_buckets) {
-    //     int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    /**
+     * Accumulation kernel adds up points in each bucket -- this can be swapped out for efficient sum reduction kernel (tree reduction method)
+     */
+    __global__ void accumulate_buckets_kernel
+    (g1_gpu::element *buckets, unsigned *bucket_offsets, unsigned *bucket_sizes, unsigned *single_bucket_indices,
+    unsigned *point_indices, g1_gpu::element *points, unsigned num_buckets) {
+        int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-    //     // Parameters for coperative groups
-    //     auto grp = fixnum::layout();
-    //     int subgroup = grp.meta_group_rank();
-    //     int subgroup_size = grp.meta_group_size();
+        // Parameters for coperative groups
+        auto grp = fixnum::layout();
+        int subgroup = grp.meta_group_rank();
+        int subgroup_size = grp.meta_group_size();
 
-    //     // Stores the indices, sizes, and offsets of the buckets and points
-    //     unsigned bucket_index = single_bucket_indices[(subgroup + (subgroup_size * blockIdx.x))];
-    //     unsigned bucket_size = bucket_sizes[(subgroup + (subgroup_size * blockIdx.x))];
-    //     unsigned bucket_offset = bucket_offsets[(subgroup + (subgroup_size * blockIdx.x))];
+        // Stores the indices, sizes, and offsets of the buckets and points
+        unsigned bucket_index = single_bucket_indices[(subgroup + (subgroup_size * blockIdx.x))];
+        unsigned bucket_size = bucket_sizes[(subgroup + (subgroup_size * blockIdx.x))];
+        unsigned bucket_offset = bucket_offsets[(subgroup + (subgroup_size * blockIdx.x))];
 
-    //     // printf("bucket size is: %d", bucket_size);
+        // printf("bucket size is: %d", bucket_size);
 
-    //     // Sync loads
-    //     grp.sync();
+        // Sync loads
+        grp.sync();
 
-    //     // Return empty bucket
-    //     if (bucket_size == 0) {
-    //         return;
-    //     }
+        // Return empty bucket
+        if (bucket_size == 0) {
+            return;
+        }
 
-    //     for (unsigned i = 0; i < bucket_size; i++) {
-    //         g1_gpu::add(
-    //             buckets[bucket_index].x.data[tid % 4],
-    //             buckets[bucket_index].y.data[tid % 4],
-    //             buckets[bucket_index].z.data[tid % 4],
-    //             points[point_indices[bucket_offset + i]].x.data[tid % 4],
-    //             points[point_indices[bucket_offset + i]].y.data[tid % 4],
-    //             points[point_indices[bucket_offset + i]].z.data[tid % 4],
-    //             buckets[bucket_index].x.data[tid % 4],
-    //             buckets[bucket_index].y.data[tid % 4],
-    //             buckets[bucket_index].z.data[tid % 4]
-    //         );
+        for (unsigned i = 0; i < bucket_size; i++) {
+            g1_gpu::add(
+                buckets[bucket_index].x.data[tid % 4],
+                buckets[bucket_index].y.data[tid % 4],
+                buckets[bucket_index].z.data[tid % 4],
+                points[point_indices[bucket_offset + i]].x.data[tid % 4],
+                points[point_indices[bucket_offset + i]].y.data[tid % 4],
+                points[point_indices[bucket_offset + i]].z.data[tid % 4],
+                buckets[bucket_index].x.data[tid % 4],
+                buckets[bucket_index].y.data[tid % 4],
+                buckets[bucket_index].z.data[tid % 4]
+            );
 
-    //         if (fq_gpu::is_zero(buckets[bucket_index].x.data[tid % 4]) &&
-    //             fq_gpu::is_zero(buckets[bucket_index].y.data[tid % 4]) &&
-    //             fq_gpu::is_zero(buckets[bucket_index].z.data[tid % 4])) {
-    //                 g1_gpu::doubling(
-    //                     points[point_indices[bucket_offset + i]].x.data[tid % 4],
-    //                     points[point_indices[bucket_offset + i]].y.data[tid % 4],
-    //                     points[point_indices[bucket_offset + i]].z.data[tid % 4],
-    //                     buckets[bucket_index].x.data[tid % 4],
-    //                     buckets[bucket_index].y.data[tid % 4],
-    //                     buckets[bucket_index].z.data[tid % 4]
-    //                 );
-    //         }
-    //     }
-    // }
+            if (fq_gpu::is_zero(buckets[bucket_index].x.data[tid % 4]) &&
+                fq_gpu::is_zero(buckets[bucket_index].y.data[tid % 4]) &&
+                fq_gpu::is_zero(buckets[bucket_index].z.data[tid % 4])) {
+                    g1_gpu::doubling(
+                        points[point_indices[bucket_offset + i]].x.data[tid % 4],
+                        points[point_indices[bucket_offset + i]].y.data[tid % 4],
+                        points[point_indices[bucket_offset + i]].z.data[tid % 4],
+                        buckets[bucket_index].x.data[tid % 4],
+                        buckets[bucket_index].y.data[tid % 4],
+                        buckets[bucket_index].z.data[tid % 4]
+                    );
+            }
+        }
+    }
 
     // struct accumulate_buckets_functor
     // {
@@ -329,63 +329,63 @@ namespace pippenger_common
     //     __device__ 
     // };
 
-    /**
-     * Accumulation kernel adds up points in each bucket -- this can be swapped out for efficient sum reduction kernel (tree reduction method)
-     */
-    __global__ void accumulate_buckets_kernel(g1_single::element *buckets, unsigned *bucket_offsets, unsigned *bucket_sizes, unsigned *single_bucket_indices,
-                                              unsigned *point_indices, g1_single::element *points, unsigned num_buckets)
-    {
-        // Stores the indices, sizes, and offsets of the buckets and points
-        unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+    // /**
+    //  * Accumulation kernel adds up points in each bucket -- this can be swapped out for efficient sum reduction kernel (tree reduction method)
+    //  */
+    // __global__ void accumulate_buckets_kernel(g1_single::element *buckets, unsigned *bucket_offsets, unsigned *bucket_sizes, unsigned *single_bucket_indices,
+    //                                           unsigned *point_indices, g1_single::element *points, unsigned num_buckets)
+    // {
+    //     // Stores the indices, sizes, and offsets of the buckets and points
+    //     unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-        if (tid >= num_buckets)
-            return;
+    //     if (tid >= num_buckets)
+    //         return;
 
-        unsigned bucket_index = single_bucket_indices[tid];
-        unsigned bucket_size = bucket_sizes[tid];
-        unsigned bucket_offset = bucket_offsets[tid];
+    //     unsigned bucket_index = single_bucket_indices[tid];
+    //     unsigned bucket_size = bucket_sizes[tid];
+    //     unsigned bucket_offset = bucket_offsets[tid];
 
-        // printf("bucket size is: %d", bucket_size);
+    //     // printf("bucket size is: %d", bucket_size);
 
-        // Sync loads
-        // grp.sync();
-        // __syncthreads();
+    //     // Sync loads
+    //     // grp.sync();
+    //     // __syncthreads();
 
-        // Return empty bucket
-        if (bucket_size == 0)
-        {
-            return;
-        }
+    //     // Return empty bucket
+    //     if (bucket_size == 0)
+    //     {
+    //         return;
+    //     }
 
-        for (unsigned i = 0; i < bucket_size; i++)
-        {
-            g1_single::add(
-                buckets[bucket_index].x.data,
-                buckets[bucket_index].y.data,
-                buckets[bucket_index].z.data,
-                points[point_indices[bucket_offset + i]].x.data,
-                points[point_indices[bucket_offset + i]].y.data,
-                points[point_indices[bucket_offset + i]].z.data,
-                buckets[bucket_index].x.data,
-                buckets[bucket_index].y.data,
-                buckets[bucket_index].z.data);
-            // 0G_1 0G_2 0 1 1 2 2 3 3G_8
-            // [0G_1-G_3 3G_4-G_5 5 7]
+    //     for (unsigned i = 0; i < bucket_size; i++)
+    //     {
+    //         g1_single::add(
+    //             buckets[bucket_index].x.data,
+    //             buckets[bucket_index].y.data,
+    //             buckets[bucket_index].z.data,
+    //             points[point_indices[bucket_offset + i]].x.data,
+    //             points[point_indices[bucket_offset + i]].y.data,
+    //             points[point_indices[bucket_offset + i]].z.data,
+    //             buckets[bucket_index].x.data,
+    //             buckets[bucket_index].y.data,
+    //             buckets[bucket_index].z.data);
+    //         // 0G_1 0G_2 0 1 1 2 2 3 3G_8
+    //         // [0G_1-G_3 3G_4-G_5 5 7]
 
-            // if (fq_single::is_zero(buckets[bucket_index].x.data) &&
-            //     fq_single::is_zero(buckets[bucket_index].y.data) &&
-            //     fq_single::is_zero(buckets[bucket_index].z.data)) {
-            //         g1_single::doubling(
-            //             points[point_indices[bucket_offset + i]].x.data,
-            //             points[point_indices[bucket_offset + i]].y.data,
-            //             points[point_indices[bucket_offset + i]].z.data,
-            //             buckets[bucket_index].x.data,
-            //             buckets[bucket_index].y.data,
-            //             buckets[bucket_index].z.data
-            //         );
-            // }
-        }
-    }
+    //         // if (fq_single::is_zero(buckets[bucket_index].x.data) &&
+    //         //     fq_single::is_zero(buckets[bucket_index].y.data) &&
+    //         //     fq_single::is_zero(buckets[bucket_index].z.data)) {
+    //         //         g1_single::doubling(
+    //         //             points[point_indices[bucket_offset + i]].x.data,
+    //         //             points[point_indices[bucket_offset + i]].y.data,
+    //         //             points[point_indices[bucket_offset + i]].z.data,
+    //         //             buckets[bucket_index].x.data,
+    //         //             buckets[bucket_index].y.data,
+    //         //             buckets[bucket_index].z.data
+    //         //         );
+    //         // }
+    //     }
+    // }
 
     struct point_add_functor
     {
